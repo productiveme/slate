@@ -61,6 +61,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import Highlight from '@tiptap/extension-highlight';
 import { Icon } from '@iconify/vue';
 import { useStorage } from '../composables/useStorage';
 import FloatingToolbar from './FloatingToolbar.vue';
@@ -82,6 +83,10 @@ const props = defineProps({
   fileId: {
     type: String,
     required: true
+  },
+  searchQuery: {
+    type: String,
+    default: ''
   }
 });
 
@@ -136,7 +141,13 @@ const editor = useEditor({
     }),
     TableRow,
     TableHeader,
-    TableCell
+    TableCell,
+    Highlight.configure({
+      multicolor: false,
+      HTMLAttributes: {
+        class: 'search-highlight',
+      },
+    })
   ],
   onUpdate: ({ editor }) => {
     emit('update:modelValue', editor.getHTML());
@@ -326,12 +337,32 @@ watch(() => props.fileId, async (newId, oldId) => {
       const content = await storage.getDocument(newId);
       if (content && editor.value) {
         editor.value.commands.setContent(markdownToHTML(content));
+        
+        await nextTick();
+        
+        clearHighlights();
+        
+        if (props.searchQuery && props.searchQuery.trim()) {
+          highlightSearchResults(props.searchQuery);
+        }
       }
     } catch (error) {
       console.error('Error loading content for new file:', error);
     }
   }
 }, { immediate: true });
+
+watch(() => props.searchQuery, (query) => {
+  if (!editor.value) return;
+  
+  clearHighlights();
+  
+  if (query && query.trim()) {
+    nextTick(() => {
+      highlightSearchResults(query);
+    });
+  }
+});
 
 // Save content to IndexedDB
 async function saveContent() {
@@ -340,8 +371,6 @@ async function saveContent() {
   try {
     const content = editor.value.getHTML();
     await storage.saveDocument(props.fileId, content);
-    
-    await storage.commitToGitHub(props.fileId, content);
     
     saveStatus.value = 'saved';
     
@@ -359,11 +388,54 @@ async function saveContent() {
 // Add method to select all editor content
 function selectAllContent(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-    e.preventDefault(); // Prevent default browser select all
+    e.preventDefault();
     if (editor.value) {
       editor.value.commands.selectAll();
     }
   }
+}
+
+function highlightSearchResults(query) {
+  if (!editor.value || !query) return;
+  
+  const { state, view } = editor.value;
+  const { doc } = state;
+  const searchTerm = query.toLowerCase();
+  const tr = state.tr;
+  
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text) {
+      const text = node.text.toLowerCase();
+      let index = 0;
+      
+      while ((index = text.indexOf(searchTerm, index)) !== -1) {
+        const from = pos + index;
+        const to = from + searchTerm.length;
+        
+        tr.addMark(
+          from,
+          to,
+          state.schema.marks.highlight.create()
+        );
+        
+        index += searchTerm.length;
+      }
+    }
+  });
+  
+  if (tr.docChanged) {
+    view.dispatch(tr);
+  }
+}
+
+function clearHighlights() {
+  if (!editor.value) return;
+  
+  const { state, view } = editor.value;
+  const tr = state.tr;
+  
+  tr.removeMark(0, state.doc.content.size, state.schema.marks.highlight);
+  view.dispatch(tr);
 }
 </script>
 
@@ -532,5 +604,10 @@ function selectAllContent(e) {
 
 .ProseMirror .resize-cursor {
   cursor: col-resize;
+}
+
+.ProseMirror mark.search-highlight {
+  @apply bg-yellow-200 rounded-sm;
+  padding: 2px 0;
 }
 </style> 

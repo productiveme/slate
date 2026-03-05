@@ -77,7 +77,7 @@
       :class="isSidebarOpen ? 'w-64' : 'w-14'"
     >
       <Sidebar 
-        :files="files" 
+        :files="filteredFiles" 
         :activeFile="activeFile" 
         @select-file="selectFile" 
         @create-file="createFile" 
@@ -85,6 +85,7 @@
         @toggle-sidebar="toggleSidebar"
         @delete-file="deleteFile"
         @rename-file="handleFileRename"
+        :repo-name="githubRepoName"
       />
     </div>
     
@@ -100,6 +101,27 @@
         </div>
 
         <div class="flex items-center gap-4">
+          <div class="relative">
+            <input
+              v-model="searchQuery"
+              @input="handleSearch"
+              type="text"
+              placeholder="Search..."
+              class="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent w-64"
+            />
+            <Icon 
+              icon="lucide:search" 
+              class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <button
+              v-if="searchQuery"
+              @click="clearSearch"
+              class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100"
+            >
+              <Icon icon="lucide:x" class="w-3 h-3 text-gray-400" />
+            </button>
+          </div>
+          <div class="h-4 w-px bg-gray-200"></div>
           <button 
             @click="syncFromGitHub"
             class="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95 text-sm"
@@ -131,10 +153,10 @@
           >
             <Icon icon="lucide:file-down" class="w-4 h-4" />
           </button>
-          <a href="https://github.com/thetronjohnson/slate/" target="_blank" class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95" title="View on GitHub">
+          <a :href="githubRepoUrl || 'https://github.com/thetronjohnson/slate/'" target="_blank" class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95" title="View on GitHub">
             <Icon icon="lucide:github" class="w-4 h-4" />
           </a>
-          <a href="https://www.kiranjohns.com" target="_blank" class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95" title="Visit Website">
+          <a href="https://productive.me" target="_blank" class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95" title="Visit Website">
             <Icon icon="lucide:globe" class="w-4 h-4" />
           </a>
         </div>
@@ -149,6 +171,7 @@
             v-model="activeFile.content" 
             @update:modelValue="updateFileContent"
             :fileId="activeFile.id"
+            :searchQuery="searchQuery"
           />
           <div v-else class="flex flex-col items-center justify-center h-full mt-12 text-gray-400">
             <div class="max-w-md text-center">
@@ -268,8 +291,25 @@ const isSyncing = ref(false);
 const lastSyncTime = ref(null);
 const showGitHubConfigModal = ref(false);
 const githubConfigured = ref(false);
+const githubRepoUrl = ref('');
+const githubRepoName = ref('Slate');
+const searchQuery = ref('');
+let searchDebounceTimer = null;
 
 const { storage, initStorage } = useStorage();
+
+const filteredFiles = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return files.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return files.value.filter(file => {
+    const nameMatch = file.name.toLowerCase().includes(query);
+    const contentMatch = file.content?.toLowerCase().includes(query);
+    return nameMatch || contentMatch;
+  });
+});
 
 onMounted(async () => {
   await initStorage();
@@ -289,6 +329,11 @@ onMounted(async () => {
     const configResponse = await $fetch('/api/github/config');
     githubConfigured.value = configResponse.configured;
     
+    if (configResponse.configured && configResponse.config) {
+      githubRepoUrl.value = `https://github.com/${configResponse.config.owner}/${configResponse.config.repo}`;
+      githubRepoName.value = configResponse.config.repo;
+    }
+    
     if (!githubConfigured.value) {
       showGitHubConfigModal.value = true;
     }
@@ -305,15 +350,15 @@ onMounted(async () => {
     const savedFiles = await storage.getFiles();
     files.value = savedFiles;
     
+    for (const file of files.value) {
+      const content = await storage.getDocument(file.id);
+      if (content) {
+        file.content = content;
+      }
+    }
+    
     if (files.value.length > 0) {
       activeFile.value = files.value[0];
-      const content = await storage.getDocument(activeFile.value.id);
-      if (content) {
-        activeFile.value = {
-          ...activeFile.value,
-          content
-        };
-      }
     } else {
       await createFile('Getting Started', `
         <h1>Welcome to Slate</h1>
@@ -332,9 +377,14 @@ onMounted(async () => {
   }
 });
 
-function selectFile(file) {
+async function selectFile(file) {
+  if (!file.content) {
+    const content = await storage.getDocument(file.id);
+    if (content) {
+      file.content = content;
+    }
+  }
   activeFile.value = file;
-  // Save files list to persist any changes (like renames)
   saveFiles();
 }
 
@@ -342,16 +392,16 @@ async function createFile(name, content = '') {
   const file = {
     id: crypto.randomUUID(),
     name,
+    path: `${name.toLowerCase().replace(/\s+/g, '-')}.md`,
+    sha: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
   
-  // Save the content first
   await storage.saveDocument(file.id, content || '<h1>Untitled</h1>');
 
   files.value.push(file);
   activeFile.value = file;
-  // Save file metadata
   saveFiles();
   posthog.capture('file_created', {
     file_id: file.id,
@@ -360,13 +410,18 @@ async function createFile(name, content = '') {
 
 function updateFileContent(newContent) {
   if (activeFile.value) {
-    // Update the active file's content
     activeFile.value = {
       ...activeFile.value,
       content: newContent
     };
     activeFile.value.updatedAt = new Date().toISOString();
     saveFiles();
+    
+    if (activeFile.value.path) {
+      storage.commitToGitHub(activeFile.value.id, activeFile.value.path, newContent).catch(error => {
+        console.error('Error committing to GitHub:', error);
+      });
+    }
   }
 }
 
@@ -539,7 +594,33 @@ async function syncFromGitHub() {
 async function handleGitHubConfigSaved() {
   showGitHubConfigModal.value = false;
   githubConfigured.value = true;
+  
+  const configResponse = await $fetch('/api/github/config');
+  if (configResponse.configured && configResponse.config) {
+    githubRepoUrl.value = `https://github.com/${configResponse.config.owner}/${configResponse.config.repo}`;
+    githubRepoName.value = configResponse.config.repo;
+  }
+  
   await syncFromGitHub();
+}
+
+function handleSearch() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+  
+  searchDebounceTimer = setTimeout(() => {
+    posthog.capture('search_performed', {
+      query: searchQuery.value,
+    });
+  }, 300);
+}
+
+function clearSearch() {
+  searchQuery.value = '';
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
 }
 </script>
 

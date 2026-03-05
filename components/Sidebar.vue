@@ -69,9 +69,9 @@
       <div class="flex items-center justify-between w-full" :class="{ 'justify-center': isCollapsed }">
         <span 
           v-if="!isCollapsed" 
-          class="font-bold text-sm text-slate-700"
+          class="font-bold text-sm text-slate-700 truncate"
         >
-          Slate
+          {{ repoName }}
         </span>
         
         <!-- Collapse/Expand Button -->
@@ -179,6 +179,10 @@ const props = defineProps({
   isCollapsed: {
     type: Boolean,
     default: false
+  },
+  repoName: {
+    type: String,
+    default: 'Slate'
   }
 });
 
