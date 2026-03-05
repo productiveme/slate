@@ -6,18 +6,7 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/tailwindcss',
     '@nuxtjs/google-fonts',
-    '@nuxtjs/supabase',
   ],
-  supabase: {
-    redirect: false,
-    redirectOptions: {
-      login: '/login',
-      callback: '/auth/callback',
-    },
-    url: process.env.SUPABASE_URL,
-    key: process.env.SUPABASE_KEY,
-    serviceKey: process.env.SUPABASE_SERVICE_KEY
-  },
   googleFonts: {
     families: {
       'Lato': [300, 400, 700, 900],
@@ -35,6 +24,9 @@ export default defineNuxtConfig({
       posthogKey: process.env.POSTHOG_KEY,
       posthogHost: process.env.POSTHOG_HOST
     },
-    openaiApiKey: process.env.OPENAI_API_KEY,
+    githubToken: process.env.GITHUB_TOKEN,
+    githubOwner: process.env.GITHUB_OWNER,
+    githubRepo: process.env.GITHUB_REPO,
+    githubBranch: process.env.GITHUB_BRANCH || 'main',
   }
 })

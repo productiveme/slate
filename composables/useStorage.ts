@@ -1,10 +1,10 @@
 import localforage from 'localforage';
 
-// Define interfaces for document types
-
 interface SlateFile {
   id: string;
   name: string;
+  path: string;
+  sha: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -14,7 +14,13 @@ interface FilesData {
   updatedAt: string;
 }
 
-// Define the storage interface
+interface GitHubFile {
+  id: string;
+  name: string;
+  path: string;
+  sha: string;
+}
+
 interface StorageInterface {
   saveDocument(id: string, content: string): Promise<void>;
   getDocument(id: string): Promise<string | null>;
@@ -23,19 +29,23 @@ interface StorageInterface {
   getSetting<T>(key: string): Promise<T | null>;
   saveFiles(files: SlateFile[]): Promise<void>;
   getFiles(): Promise<SlateFile[]>;
+  syncFromGitHub(): Promise<void>;
+  commitToGitHub(fileId: string, filePath: string, content: string): Promise<void>;
 }
 
-// Define the return type of the useStorage function
 interface StorageReturn {
   storage: StorageInterface;
   isReady: Ref<boolean>;
+  isSyncing: Ref<boolean>;
+  lastSyncTime: Ref<string | null>;
   initStorage: () => Promise<void>;
 }
 
 export function useStorage(): StorageReturn {
   const isReady = ref<boolean>(false);
+  const isSyncing = ref<boolean>(false);
+  const lastSyncTime = ref<string | null>(null);
 
-  // Initialize stores
   const documentStore = localforage.createInstance({
     name: 'SlateDB',
     storeName: 'documents'
@@ -51,7 +61,6 @@ export function useStorage(): StorageReturn {
     storeName: 'files'
   });
 
-  // Initialize storage
   async function initStorage(): Promise<void> {
     try {
       await Promise.all([
@@ -129,6 +138,8 @@ export function useStorage(): StorageReturn {
         const serializableFiles: SlateFile[] = files.map(file => ({
           id: file.id,
           name: file.name,
+          path: file.path,
+          sha: file.sha,
           createdAt: file.createdAt,
           updatedAt: file.updatedAt
         }));
@@ -154,12 +165,86 @@ export function useStorage(): StorageReturn {
         console.error('Error getting files:', error);
         throw error;
       }
+    },
+
+    async syncFromGitHub(): Promise<void> {
+      if (!isReady.value) await initStorage();
+      
+      try {
+        isSyncing.value = true;
+
+        const response = await $fetch<{ success: boolean; files: GitHubFile[] }>('/api/github/files');
+        
+        if (!response.success) {
+          throw new Error('Failed to fetch files from GitHub');
+        }
+
+        const files: SlateFile[] = response.files.map(file => ({
+          id: file.sha,
+          name: file.name,
+          path: file.path,
+          sha: file.sha,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }));
+
+        await storage.saveFiles(files);
+
+        for (const file of response.files) {
+          const contentResponse = await $fetch<{ success: boolean; content: string }>(`/api/github/file?path=${encodeURIComponent(file.path)}`);
+          
+          if (contentResponse.success) {
+            await documentStore.setItem(file.sha, contentResponse.content);
+          }
+        }
+
+        lastSyncTime.value = new Date().toISOString();
+        await settingsStore.setItem('lastSyncTime', lastSyncTime.value);
+      } catch (error: any) {
+        console.error('Error syncing from GitHub:', error);
+        if (error?.statusCode === 401 || error?.status === 401) {
+          throw { statusCode: 401, message: 'GitHub configuration not found' };
+        }
+        throw error;
+      } finally {
+        isSyncing.value = false;
+      }
+    },
+
+    async commitToGitHub(fileId: string, filePath: string, content: string): Promise<void> {
+      if (!isReady.value) await initStorage();
+      
+      try {
+        const files = await storage.getFiles();
+        const file = files.find(f => f.id === fileId);
+
+        const response = await $fetch('/api/github/commit', {
+          method: 'POST',
+          body: {
+            path: filePath,
+            content,
+            message: `Update ${filePath}`,
+            sha: file?.sha
+          }
+        });
+
+        if (file) {
+          file.sha = (response as any).sha;
+          file.updatedAt = new Date().toISOString();
+          await storage.saveFiles(files);
+        }
+      } catch (error) {
+        console.error('Error committing to GitHub:', error);
+        throw error;
+      }
     }
   };
 
   return {
     storage,
     isReady,
+    isSyncing,
+    lastSyncTime,
     initStorage
   };
 }

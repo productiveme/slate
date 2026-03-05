@@ -1,5 +1,12 @@
 <template>
   <div class="flex h-screen bg-white">
+    <!-- GitHub Config Modal -->
+    <GitHubConfigModal
+      :is-open="showGitHubConfigModal"
+      @close="showGitHubConfigModal = false"
+      @saved="handleGitHubConfigSaved"
+    />
+
     <!-- Export Modal -->
     <Modal
       :is-open="showExportModal"
@@ -62,133 +69,7 @@
       </template>
     </Modal>
     
-    <!-- Public Pages Modal -->
-    <PublicPagesModal
-      :is-open="showPublicPagesModal"
-      @close="showPublicPagesModal = false"
-    />
-    
-    <!-- Share Modal -->
-    <Modal
-      :is-open="showShareModal"
-      :title="user ? 'Publish Page' : 'Share Your Work'"
-      @close="showShareModal = false"
-    >
-      <div class="space-y-4">
-        <!-- Published State -->
-        <div v-if="publishedPageId" class="flex items-center gap-3 p-4 rounded-md border border-slate-200 bg-slate-50">
-          <div class="flex-1 min-w-0 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">🎉</span>
-              <p class="text-sm font-medium text-slate-900">Page Published!</p>
-            </div>
-            <div class="space-y-1.5">
-              <p class="text-xs text-slate-500">Copy this link to share your page:</p>
-              <div class="flex items-center gap-2">
-                <p class="flex-1 font-mono text-sm text-slate-700 bg-white px-3 py-1.5 rounded border border-slate-200 truncate">
-                  {{ `${$config.public.appUrl}/${publishedPageId}` }}
-                </p>
-                <div class="relative">
-                  <button 
-                    @click="copyPageId"
-                    class="p-2 rounded-md hover:bg-white text-slate-500 hover:text-slate-900 transition-all duration-150 border border-transparent hover:border-slate-200"
-                    title="Copy page URL"
-                  >
-                    <Icon icon="lucide:copy" class="w-4 h-4" />
-                  </button>
-                  <!-- Copied Message -->
-                  <div
-                    v-if="showCopiedMessage"
-                    class="absolute bottom-full right-0 mb-2 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded shadow-sm animate-fade-in-down"
-                  >
-                    Copied!
-                  </div>
-                </div>
-              </div>
-              <!-- New sync warning message -->
-              <div class="mt-3 flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
-                <Icon icon="lucide:alert-circle" class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <p class="text-xs text-amber-700">
-                  New changes are not automatically synced to published pages. To share your latest changes, please delete this published page and create a new one.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Not Logged In State -->
-        <div v-else-if="!user" class="space-y-6">
-          <div class="space-y-4">
-            <div class="flex items-center gap-3 p-4 rounded-md border border-slate-200 bg-slate-50">
-              <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                <Icon icon="lucide:globe" class="w-6 h-6 text-blue-500" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-slate-900 mb-1">Share with anyone</h3>
-                <p class="text-sm text-slate-500">Get a public link to share your document</p>
-              </div>
-            </div>
-          </div>
 
-          <div class="pt-4 border-t border-slate-200">
-            <button
-              @click="handleLogin"
-              class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-md hover:bg-slate-800 transition-all duration-200 text-sm font-medium active:scale-95"
-            >
-              <Icon icon="lucide:log-in" class="w-4 h-4" />
-              Login in to publish
-            </button>
-          </div>
-        </div>
-        
-        <!-- Logged In, Not Published State -->
-        <div v-else class="space-y-3">
-          <p class="text-sm font-medium text-slate-700">Make your document public</p>
-          <p class="text-xs text-slate-500">Once published, anyone with the page link can view this document.</p>
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <label class="block text-sm font-medium text-slate-700">Page Name</label>
-              <input
-                v-model="publishPageName"
-                type="text"
-                placeholder="Enter a name for your page"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <template #actions>
-        <div class="flex justify-end gap-3">
-          <button
-            v-if="user && !publishedPageId"
-            type="button"
-            @click="showShareModal = false"
-            class="inline-flex justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all duration-200 active:scale-95"
-          >
-            Cancel
-          </button>
-          <button
-            v-if="user && !publishedPageId"
-            type="button"
-            @click="publishPage"
-            :disabled="isPublishing || !publishPageName"
-            class="inline-flex justify-center rounded-md px-4 py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ isPublishing ? 'Publishing...' : 'Publish' }}
-          </button>
-          <button
-            v-else-if="publishedPageId"
-            type="button"
-            class="inline-flex justify-center rounded-md px-4 py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-200 active:scale-95"
-            @click="showShareModal = false"
-          >
-            Done
-          </button>
-        </div>
-      </template>
-    </Modal>
     
     <!-- Sidebar -->
     <div 
@@ -220,19 +101,21 @@
 
         <div class="flex items-center gap-4">
           <button 
-            @click="editorRef?.handleCommandPalette()"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100/50 text-slate-600 hover:bg-slate-200/50 hover:text-slate-800 transition-all duration-150 active:scale-95 group min-w-[200px] justify-start"
-            title="Open AI Assistant (⌘K)"
+            @click="syncFromGitHub"
+            class="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95 text-sm"
+            :disabled="isSyncing"
+            :title="lastSyncTime ? `Last synced ${formatDate(lastSyncTime.toISOString())}` : 'Sync from GitHub'"
           >
             <Icon 
-              icon="lucide:sparkles" 
-              class="w-4 h-4 text-blue-500" 
+              :icon="isSyncing ? 'lucide:loader-2' : 'lucide:refresh-cw'" 
+              class="w-4 h-4"
+              :class="{ 'animate-spin': isSyncing }" 
             />
-            <span class="text-sm text-slate-500">Ask Slate AI...</span>
-            <div class="ml-auto flex items-center">
-              <kbd class="px-1.5 py-0.5 text-xs font-mono text-slate-400 bg-slate-200/50 rounded">cmd K</kbd>
-            </div>
+            <span v-if="lastSyncTime" class="text-xs text-gray-400">
+              {{ formatDate(lastSyncTime.toISOString()) }}
+            </span>
           </button>
+          <div class="h-4 w-px bg-gray-200"></div>
           <button 
             @click="editorRef?.saveContent()"
             class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95"
@@ -241,13 +124,6 @@
             <Icon icon="lucide:save" class="w-4 h-4" />
           </button>
           <div class="h-4 w-px bg-gray-200 mx-2"></div>
-          <button 
-            @click="showShareModal = true"
-            class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95"
-            title="Publish page"
-          >
-            <Icon icon="lucide:share-2" class="w-4 h-4" />
-          </button>
           <button 
             @click="showExportModal = true"
             class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95"
@@ -261,50 +137,6 @@
           <a href="https://www.kiranjohns.com" target="_blank" class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95" title="Visit Website">
             <Icon icon="lucide:globe" class="w-4 h-4" />
           </a>
-          <div class="h-4 w-px bg-gray-200"></div>
-          <!-- User Profile / Login Button -->
-          <div class="relative" v-if="user">
-            <button 
-              @click="showUserMenu = !showUserMenu"
-              class="flex items-center justify-center w-8 h-8 rounded-full overflow-hidden border-2 border-slate-200 hover:border-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500"
-              title="User menu"
-            >
-              <img 
-                :src="user.user_metadata?.avatar_url" 
-                :alt="user.user_metadata?.full_name"
-                class="w-full h-full object-cover"
-              />
-            </button>
-            <!-- Dropdown Menu -->
-            <div 
-              v-if="showUserMenu"
-              class="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 py-1"
-            >
-              <div class="px-4 py-2 text-sm text-slate-700 border-b border-slate-100">
-                {{ user.user_metadata?.full_name }}
-              </div>
-              <button
-                @click="showPublicPagesModal = true; showUserMenu = false"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Public Pages
-              </button>
-              <button
-                @click="handleLogout"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
-          <button 
-            v-else
-            @click="handleLogin" 
-            class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-all duration-200 text-sm font-medium active:scale-95"
-          >
-            <Icon icon="lucide:log-in" class="w-4 h-4" />
-            <span>Login</span>
-          </button>
         </div>
       </div>
       
@@ -362,15 +194,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, computed, watch } from 'vue';
+import { ref, onMounted, nextTick, computed } from 'vue';
 import { Icon } from '@iconify/vue';
 import Modal from '../components/Modal.vue';
-import PublicPagesModal from '../components/PublicPagesModal.vue';
+import GitHubConfigModal from '../components/GitHubConfigModal.vue';
 import TurndownService from 'turndown';
 import { useStorage } from '../composables/useStorage';
-import { useRouter } from 'vue-router';
 import { useEventListener } from '@vueuse/core';
-import { useSupabaseClient, useSupabaseUser } from '#imports';
 import posthog from 'posthog-js';
 
 // Local Storage Keys
@@ -433,28 +263,19 @@ const editorRef = ref(null);
 const isSidebarOpen = ref(true);
 const showExportModal = ref(false);
 const isExporting = ref(false);
-const showShareModal = ref(false);
-const showPublicPagesModal = ref(false);
-const publishPageName = ref('');
-const isPublishing = ref(false);
-const publishedPageId = ref(null);
 const editorContainer = ref(null);
-const router = useRouter();
-const user = useSupabaseUser();
-const showUserMenu = ref(false);
-const supabase = useSupabaseClient();
-const showCopiedMessage = ref(false);
+const isSyncing = ref(false);
+const lastSyncTime = ref(null);
+const showGitHubConfigModal = ref(false);
+const githubConfigured = ref(false);
 
 const { storage, initStorage } = useStorage();
 
 onMounted(async () => {
-  // Initialize storage
   await initStorage();
   
-  // Add global listener to prevent default select all
   useEventListener(document, 'keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-      // Only prevent default if we're not in an input or textarea
       if (
         e.target.tagName !== 'INPUT' && 
         e.target.tagName !== 'TEXTAREA'
@@ -465,30 +286,35 @@ onMounted(async () => {
   });
   
   try {
-    // Load sidebar state
+    const configResponse = await $fetch('/api/github/config');
+    githubConfigured.value = configResponse.configured;
+    
+    if (!githubConfigured.value) {
+      showGitHubConfigModal.value = true;
+    }
+    
     const sidebarState = await storage.getSetting(SETTINGS.SIDEBAR_STATE);
     if (sidebarState !== null) {
       isSidebarOpen.value = sidebarState;
     }
     
-    // Load saved files
+    if (githubConfigured.value) {
+      await syncFromGitHub();
+    }
+    
     const savedFiles = await storage.getFiles();
     files.value = savedFiles;
     
-    // If we have files, load the first one's content
     if (files.value.length > 0) {
       activeFile.value = files.value[0];
-      // Load the content for the active file
       const content = await storage.getDocument(activeFile.value.id);
       if (content) {
-        // Create a reactive property for content
         activeFile.value = {
           ...activeFile.value,
           content
         };
       }
     } else {
-      // Create a default welcome file if no files exist
       await createFile('Getting Started', `
         <h1>Welcome to Slate</h1>
         <p>This is your first document. Here are some things you can do:</p>
@@ -497,35 +323,13 @@ onMounted(async () => {
           <li>Use the formatting tools above to style your text</li>
           <li>Create new documents using the sidebar</li>
           <li>Export your documents as Markdown or PDF</li>
-          <li>Your documents are automatically saved in your browser</li>
+          <li>Your documents are automatically saved and synced to GitHub</li>
         </ul>
-        <blockquote>
-          <p>Pro Tip: Try "⌘ + K" to use Slate AI</p>
-        </blockquote>
       `.trim());
     }
   } catch (error) {
     console.error('Error loading data:', error);
   }
-
-  // Close user menu when clicking outside
-  document.addEventListener('click', (e) => {
-    if (showUserMenu.value && !e.target.closest('.relative')) {
-      showUserMenu.value = false;
-    }
-  });
-
-  // Watch for user changes to identify them in PostHog
-  watch(user, (newUser) => {
-    if (newUser) {
-      posthog.identify(newUser.id, {
-        email: newUser.email,
-        name: newUser.user_metadata?.full_name,
-      });
-    } else {
-      posthog.reset(); // Clear user identification when logged out
-    }
-  }, { immediate: true });
 });
 
 function selectFile(file) {
@@ -695,104 +499,47 @@ function deleteFile(file) {
   });
 }
 
-// Handle file rename
 function handleFileRename(file) {
-  // Find and update the file in our list
   const index = files.value.findIndex(f => f.id === file.id);
   if (index !== -1) {
-    // Preserve the current content
     const currentContent = files.value[index].content;
     files.value[index] = {
       ...files.value[index],
       name: file.name,
       updatedAt: file.updatedAt,
-      content: currentContent // Keep the existing content
+      content: currentContent
     };
     
-    // If this is the active file, update it too
     if (activeFile.value?.id === file.id) {
       activeFile.value = {
         ...files.value[index],
-        content: currentContent // Keep the existing content
+        content: currentContent
       };
     }
     
-    // Save the updated files list
     saveFiles();
   }
 }
 
-async function handleLogout() {
+async function syncFromGitHub() {
+  isSyncing.value = true;
   try {
-    await supabase.auth.signOut();
-    showUserMenu.value = false;
-    await router.push('/'); // Redirect back to index page after logout
+    await storage.syncFromGitHub();
+    lastSyncTime.value = new Date();
   } catch (error) {
-    console.error('Error signing out:', error);
-  }
-}
-
-async function handleLogin() {
-  const supabase = useSupabaseClient();
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`
-      }
-    });
-    if (error) throw error;
-    posthog.capture('login_initiated');
-  } catch (error) {
-    console.error('Error signing in with Google:', error);
-  }
-}
-
-async function publishPage() {
-  if (!user.value || !activeFile.value) return;
-  
-  isPublishing.value = true;
-  try {
-    const { data, error } = await $fetch('/api/pages/publish', {
-      method: 'POST',
-      body: {
-        name: publishPageName.value,
-        content: activeFile.value.content,
-        userId: user.value.id
-      }
-    });
-    
-    if (error) throw error;
-    publishedPageId.value = data.id;
-    posthog.capture('page_published', {
-      page_id: data.id,
-      page_name: publishPageName.value,
-    });
-  } catch (error) {
-    console.error('Error publishing page:', error);
-    alert('Failed to publish page. Please try again.');
+    console.error('Error syncing from GitHub:', error);
+    if (error?.statusCode === 401) {
+      showGitHubConfigModal.value = true;
+    }
   } finally {
-    isPublishing.value = false;
+    isSyncing.value = false;
   }
 }
 
-async function copyPageId() {
-  if (!publishedPageId.value) return;
-  
-  try {
-    const config = useRuntimeConfig();
-    const pageUrl = `${config.public.appUrl}/${publishedPageId.value}`;
-    await navigator.clipboard.writeText(pageUrl);
-    
-    // Show and auto-hide the copied message
-    showCopiedMessage.value = true;
-    setTimeout(() => {
-      showCopiedMessage.value = false;
-    }, 2000);
-  } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
-    alert('Failed to copy to clipboard. Please copy manually.');
-  }
+async function handleGitHubConfigSaved() {
+  showGitHubConfigModal.value = false;
+  githubConfigured.value = true;
+  await syncFromGitHub();
 }
 </script>
 

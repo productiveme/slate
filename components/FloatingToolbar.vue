@@ -52,6 +52,71 @@
       >
         <Icon :icon="item.icon" class="w-4 h-4" />
       </button>
+      
+      <!-- Table Actions (only show when in table) -->
+      <template v-if="editor && editor.isActive('table')">
+        <div class="h-5 w-px bg-gray-200/75 mx-1"></div>
+        
+        <button 
+          @click="editor.chain().focus().addColumnBefore().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Add Column Before"
+        >
+          <Icon icon="lucide:arrow-left-to-line" class="w-4 h-4" />
+        </button>
+        
+        <button 
+          @click="editor.chain().focus().addColumnAfter().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Add Column After"
+        >
+          <Icon icon="lucide:arrow-right-to-line" class="w-4 h-4" />
+        </button>
+        
+        <button 
+          @click="editor.chain().focus().deleteColumn().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Delete Column"
+        >
+          <Icon icon="lucide:trash-2" class="w-4 h-4" />
+        </button>
+        
+        <div class="h-5 w-px bg-gray-200/75 mx-1"></div>
+        
+        <button 
+          @click="editor.chain().focus().addRowBefore().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Add Row Before"
+        >
+          <Icon icon="lucide:arrow-up-to-line" class="w-4 h-4" />
+        </button>
+        
+        <button 
+          @click="editor.chain().focus().addRowAfter().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Add Row After"
+        >
+          <Icon icon="lucide:arrow-down-to-line" class="w-4 h-4" />
+        </button>
+        
+        <button 
+          @click="editor.chain().focus().deleteRow().run()"
+          class="p-1.5 rounded-md hover:bg-gray-50 transition-all duration-150 active:scale-95 text-gray-500"
+          title="Delete Row"
+        >
+          <Icon icon="lucide:trash-2" class="w-4 h-4" />
+        </button>
+        
+        <div class="h-5 w-px bg-gray-200/75 mx-1"></div>
+        
+        <button 
+          @click="editor.chain().focus().deleteTable().run()"
+          class="p-1.5 rounded-md hover:bg-red-50 transition-all duration-150 active:scale-95 text-red-500"
+          title="Delete Table"
+        >
+          <Icon icon="lucide:table-2" class="w-4 h-4" />
+        </button>
+      </template>
     </div>
   </Transition>
 </template>

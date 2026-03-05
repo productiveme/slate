@@ -1,0 +1,28 @@
+[GET] http://localhost:3000/your_posthog_host/array/your_posthog_key/config.js => [404] Page not found: /your_posthog_host/array/your_posthog_key/config.js
+[POST] http://localhost:3000/your_posthog_host/e/?ip=0&_=1772691011160&ver=1.358.1&compression=gzip-js => [404] Page not found: /your_posthog_host/e/?ip=0&_=1772691011160&ver=1.358.1&compression=gzip-js
+[GET] https://api.iconify.design/lucide.json?icons=book-open%2Cclipboard-list%2Cfile-down%2Cfile-plus%2Cfile-question%2Cgithub%2Cglobe%2Clayout-template%2Cpanel-left-close%2Crefresh-cw%2Csave => [200] 
+[GET] http://localhost:3000/api/github/files => [200] OK
+[GET] https://api.iconify.design/lucide.json?icons=loader-2 => [200] 
+[GET] http://localhost:3000/your_posthog_host/array/your_posthog_key/config.js => [404] Page not found: /your_posthog_host/array/your_posthog_key/config.js
+[GET] http://localhost:3000/your_posthog_host/array/your_posthog_key/config?ip=0&_=1772691011192&ver=1.358.1 => [404] Page not found: /your_posthog_host/array/your_posthog_key/config?ip=0&_=1772691011192&ver=1.358.1
+[POST] http://localhost:3000/your_posthog_host/flags/?v=2&ip=0&_=1772691011231&ver=1.358.1&compression=base64 => [404] Page not found: /your_posthog_host/flags/?v=2&ip=0&_=1772691011231&ver=1.358.1&compression=base64
+[GET] http://localhost:3000/api/github/file?path=01-introduction.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=02-character-creation.md => [200] OK
+[GET] http://localhost:3000/_nuxt/builds/meta/dev.json => [200] OK
+[GET] http://localhost:3000/api/github/file?path=03-attributes-and-skills.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=04-traveling-by-characters.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=05-firefights-combat.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=06-space-travel.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=07-space-battles.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=08-game-master-guide.md => [200] OK
+[GET] https://api.iconify.design/lucide.json?icons=edit%2Cfile-text%2Ctrash-2 => [200] 
+[GET] http://localhost:3000/api/github/files => [200] OK
+[GET] http://localhost:3000/api/github/file?path=01-introduction.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=02-character-creation.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=03-attributes-and-skills.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=04-traveling-by-characters.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=05-firefights-combat.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=06-space-travel.md => [200] OK
+[GET] http://localhost:3000/api/github/file?path=07-space-battles.md => [200] OK
+[POST] http://localhost:3000/your_posthog_host/e/?ip=0&_=1772691022187&ver=1.358.1 => [404] Page not found: /your_posthog_host/e/?ip=0&_=1772691022187&ver=1.358.1
+[GET] http://localhost:3000/api/github/file?path=08-game-master-guide.md => [200] OK

@@ -7,13 +7,6 @@
       :list-menu-items="listMenuItems"
       :insert-menu-items="insertMenuItems"
     />
-    <CommandPalette
-      :is-open="showCommandPalette"
-      :selected-content="getSelectedText()"
-      :full-content="editor?.getHTML()"
-      @close="showCommandPalette = false"
-      @update-content="updateSelectedText"
-    />
     
     <!-- Save Status -->
     <div class="fixed bottom-4 right-4 flex items-center gap-2">
@@ -64,13 +57,33 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { Icon } from '@iconify/vue';
-import CommandPalette from './CommandPalette.vue';
 import { useStorage } from '../composables/useStorage';
 import FloatingToolbar from './FloatingToolbar.vue';
 import { useEventListener } from '@vueuse/core';
 
 const { storage } = useStorage();
+
+function markdownToHTML(markdown) {
+  if (!markdown) return '';
+  
+  let html = markdown
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+    .replace(/!\[(.*?)\]\((.*?)\)/gim, '<img alt="$1" src="$2" />')
+    .replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2">$1</a>')
+    .replace(/\n\n/gim, '</p><p>')
+    .replace(/\n/gim, '<br />');
+  
+  return '<p>' + html + '</p>';
+}
 
 const props = defineProps({
   modelValue: {
@@ -118,14 +131,23 @@ const editor = useEditor({
       }
     }),
     Placeholder.configure({
-      placeholder: 'Type "⌘ + K" for Slate AI, or just start writing...'
+      placeholder: 'Start writing...'
     }),
     Image,
     Link,
     TaskList,
     TaskItem.configure({
       nested: true
-    })
+    }),
+    Table.configure({
+      resizable: true,
+      HTMLAttributes: {
+        class: 'editor-table',
+      },
+    }),
+    TableRow,
+    TableHeader,
+    TableCell
   ],
   onUpdate: ({ editor }) => {
     emit('update:modelValue', editor.getHTML());
@@ -242,6 +264,14 @@ const insertMenuItems = [
       if (editor.value) editor.value.chain().focus().toggleCodeBlock().run();
     },
     isActive: () => editor.value?.isActive('codeBlock')
+  },
+  {
+    name: 'Table',
+    icon: 'lucide:table',
+    action: () => {
+      if (editor.value) editor.value.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    },
+    isActive: () => editor.value?.isActive('table')
   }
 ];
 
@@ -276,25 +306,19 @@ defineExpose({
   formatMenuItems,
   listMenuItems,
   insertMenuItems,
-  handleCommandPalette,
   saveContent
 });
 
-const showCommandPalette = ref(false);
-
-// Setup keyboard shortcut
 onMounted(async () => {
-  window.addEventListener('keydown', handleKeydown);
   try {
     const savedContent = await storage.getDocument(props.fileId);
     if (savedContent && editor.value && !isInitialContentLoaded.value) {
-      editor.value.commands.setContent(savedContent);
+      editor.value.commands.setContent(markdownToHTML(savedContent));
       isInitialContentLoaded.value = true;
     }
   } catch (error) {
     console.error('Error loading content:', error);
   }
-  // Add keyboard shortcut for saving
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
@@ -302,48 +326,8 @@ onMounted(async () => {
     }
   });
 
-  // Add keyboard shortcut listener
   useEventListener(document, 'keydown', selectAllContent);
 });
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown);
-});
-
-function handleKeydown(e) {
-  // Toggle command palette on Cmd/Ctrl + K
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-    e.preventDefault();
-    showCommandPalette.value = !showCommandPalette.value;
-  }
-}
-
-function getSelectedText() {
-  if (!editor.value) return null;
-  const { from, to } = editor.value.state.selection;
-  if (from === to) {
-    return editor.value.getHTML();
-  }
-  return editor.value.state.doc.textBetween(from, to);
-}
-
-function updateSelectedText(newContent) {
-  if (!editor.value) return;
-  const { from, to } = editor.value.state.selection;
-  if (from === to) {
-    editor.value.commands.setContent(newContent);
-    return;
-  }
-  editor.value.chain()
-    .focus()
-    .deleteRange({ from, to })
-    .insertContent(newContent)
-    .run();
-}
-
-function handleCommandPalette() {
-  showCommandPalette.value = !showCommandPalette.value;
-}
 
 // Watch for fileId changes to load content
 watch(() => props.fileId, async (newId, oldId) => {
@@ -352,7 +336,7 @@ watch(() => props.fileId, async (newId, oldId) => {
     try {
       const content = await storage.getDocument(newId);
       if (content && editor.value) {
-        editor.value.commands.setContent(content);
+        editor.value.commands.setContent(markdownToHTML(content));
       }
     } catch (error) {
       console.error('Error loading content for new file:', error);
@@ -367,9 +351,11 @@ async function saveContent() {
   try {
     const content = editor.value.getHTML();
     await storage.saveDocument(props.fileId, content);
+    
+    await storage.commitToGitHub(props.fileId, content);
+    
     saveStatus.value = 'saved';
     
-    // Hide the "Saved" indicator after 2 seconds
     setTimeout(() => {
       if (saveStatus.value === 'saved') {
         saveStatus.value = '';
@@ -532,5 +518,30 @@ function selectAllContent(e) {
 
 .ProseMirror hr {
   @apply my-6 border-t border-gray-100;
+}
+
+.ProseMirror table {
+  @apply border-collapse w-full my-4;
+  border: 1px solid #e2e8f0;
+}
+
+.ProseMirror th {
+  @apply bg-slate-50 font-semibold text-left p-3 border border-slate-200;
+}
+
+.ProseMirror td {
+  @apply p-3 border border-slate-200;
+}
+
+.ProseMirror .selectedCell {
+  @apply bg-blue-50;
+}
+
+.ProseMirror .column-resize-handle {
+  @apply absolute top-0 right-[-2px] bottom-0 w-1 bg-blue-400 pointer-events-none;
+}
+
+.ProseMirror .resize-cursor {
+  cursor: col-resize;
 }
 </style> 
