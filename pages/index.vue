@@ -427,7 +427,8 @@ function updateFileContent(newContent) {
     saveFiles();
     
     if (activeFile.value.path) {
-      storage.commitToGitHub(activeFile.value.id, activeFile.value.path, newContent).catch(error => {
+      const markdown = turndownService.turndown(newContent);
+      storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
         console.error('Error committing to GitHub:', error);
       });
     }
