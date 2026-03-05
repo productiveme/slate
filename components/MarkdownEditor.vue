@@ -90,9 +90,8 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'save']);
 const saveStatus = ref('');
-let saveTimeout = null;
 
 // Track if initial content is loaded
 const isInitialContentLoaded = ref(false);
@@ -151,13 +150,6 @@ const editor = useEditor({
   ],
   onUpdate: ({ editor }) => {
     emit('update:modelValue', editor.getHTML());
-    // Trigger auto-save
-    if (saveTimeout) clearTimeout(saveTimeout);
-    // Clear any existing "Saved" message
-    saveStatus.value = '';
-    saveTimeout = setTimeout(() => {
-      saveContent();
-    }, 1500);
   }
 });
 
@@ -290,13 +282,9 @@ watch(() => props.modelValue, (newValue) => {
   }
 }, { immediate: true });
 
-// Clean up the editor on component unmount
 onBeforeUnmount(() => {
   if (editor.value) {
     editor.value.destroy();
-  }
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
   }
 });
 
@@ -364,7 +352,6 @@ watch(() => props.searchQuery, (query) => {
   }
 });
 
-// Save content to IndexedDB
 async function saveContent() {
   if (!editor.value || !props.fileId) return;
   
@@ -373,6 +360,8 @@ async function saveContent() {
     await storage.saveDocument(props.fileId, content);
     
     saveStatus.value = 'saved';
+    
+    emit('save');
     
     setTimeout(() => {
       if (saveStatus.value === 'saved') {

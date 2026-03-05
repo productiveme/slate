@@ -144,7 +144,7 @@
           </button>
           <div class="h-4 w-px bg-gray-200"></div>
           <button 
-            @click="editorRef?.saveContent()"
+            @click="handleManualSave"
             class="p-1.5 rounded-md hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-all duration-150 active:scale-95"
             title="Save (⌘S)"
           >
@@ -175,6 +175,7 @@
             ref="editorRef"
             v-model="activeFile.content" 
             @update:modelValue="updateFileContent"
+            @save="handleEditorSave"
             :fileId="activeFile.id"
             :searchQuery="searchQuery"
           />
@@ -424,14 +425,6 @@ function updateFileContent(newContent) {
       content: newContent
     };
     activeFile.value.updatedAt = new Date().toISOString();
-    saveFiles();
-    
-    if (activeFile.value.path) {
-      const markdown = turndownService.turndown(newContent);
-      storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
-        console.error('Error committing to GitHub:', error);
-      });
-    }
   }
 }
 
@@ -439,6 +432,34 @@ function saveFiles() {
   storage.saveFiles(files.value).catch(error => {
     console.error('Error saving files:', error);
   });
+}
+
+async function handleManualSave() {
+  if (!activeFile.value) return;
+  
+  await editorRef.value?.saveContent();
+  
+  saveFiles();
+  
+  if (activeFile.value.path) {
+    const markdown = turndownService.turndown(activeFile.value.content);
+    await storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
+      console.error('Error committing to GitHub:', error);
+    });
+  }
+}
+
+async function handleEditorSave() {
+  if (!activeFile.value) return;
+  
+  saveFiles();
+  
+  if (activeFile.value.path) {
+    const markdown = turndownService.turndown(activeFile.value.content);
+    await storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
+      console.error('Error committing to GitHub:', error);
+    });
+  }
 }
 
 async function exportMarkdown() {
