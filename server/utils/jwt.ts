@@ -1,38 +1,78 @@
 import jwt from 'jsonwebtoken';
 import type { H3Event } from 'h3';
 
-interface GitHubConfig {
+export interface GitHubConfig {
   token: string;
   owner: string;
   repo: string;
   branch: string;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'slate-default-secret-change-in-production';
-const JWT_EXPIRY = '365d';
-
-export function signGitHubConfig(config: GitHubConfig): string {
-  return jwt.sign(config, JWT_SECRET, {
-    expiresIn: JWT_EXPIRY
-  });
+export interface GitHubConfigStore {
+  configs: GitHubConfig[];
+  activeIndex: number;
 }
 
-export function verifyGitHubConfig(token: string): GitHubConfig | null {
+const JWT_SECRET = process.env.JWT_SECRET || 'slate-default-secret-change-in-production';
+const JWT_EXPIRY = '365d';
+const COOKIE_NAME = 'github_config';
+
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 60 * 60 * 24 * 365,
+    path: '/'
+  };
+}
+
+export function signGitHubConfigs(store: GitHubConfigStore): string {
+  return jwt.sign(store, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+}
+
+export function verifyGitHubConfigs(token: string): GitHubConfigStore | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as GitHubConfig;
-    return decoded;
+    const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
+    if (decoded.configs && Array.isArray(decoded.configs)) {
+      return decoded as unknown as GitHubConfigStore;
+    }
+    if (decoded.token && decoded.owner && decoded.repo && decoded.branch) {
+      return {
+        configs: [{
+          token: decoded.token as string,
+          owner: decoded.owner as string,
+          repo: decoded.repo as string,
+          branch: decoded.branch as string
+        }],
+        activeIndex: 0
+      };
+    }
+    return null;
   } catch (error) {
     console.error('JWT verification failed:', error);
     return null;
   }
 }
 
+export function getGitHubConfigStoreFromRequest(event: H3Event): GitHubConfigStore | null {
+  const token = getCookie(event, COOKIE_NAME);
+  if (!token) return null;
+  return verifyGitHubConfigs(token);
+}
+
 export function getGitHubConfigFromRequest(event: H3Event): GitHubConfig | null {
-  const token = getCookie(event, 'github_config');
-  
-  if (!token) {
-    return null;
-  }
-  
-  return verifyGitHubConfig(token);
+  const store = getGitHubConfigStoreFromRequest(event);
+  if (!store || store.configs.length === 0) return null;
+  const index = Math.min(store.activeIndex, store.configs.length - 1);
+  return store.configs[index];
+}
+
+export function setGitHubConfigStore(event: H3Event, store: GitHubConfigStore): void {
+  const token = signGitHubConfigs(store);
+  setCookie(event, COOKIE_NAME, token, cookieOptions());
+}
+
+export function clearGitHubConfigCookie(event: H3Event): void {
+  deleteCookie(event, COOKIE_NAME);
 }
