@@ -246,8 +246,6 @@ const turndownService = new TurndownService({
   strongDelimiter: '**'
 });
 
-turndownService.use(gfm);
-
 turndownService.addRule('tableCellParagraph', {
   filter: (node) => {
     return node.nodeName === 'P' && 
@@ -258,6 +256,42 @@ turndownService.addRule('tableCellParagraph', {
     return content;
   }
 });
+
+turndownService.addRule('tiptapTable', {
+  filter: (node) => {
+    return node.nodeName === 'TABLE';
+  },
+  replacement: (content, node) => {
+    const rows = Array.from(node.querySelectorAll('tr'));
+    if (rows.length === 0) return '';
+    
+    let markdown = '\n\n';
+    
+    rows.forEach((row, rowIndex) => {
+      const cells = Array.from(row.querySelectorAll('th, td'));
+      const isHeaderRow = cells[0]?.nodeName === 'TH';
+      
+      markdown += '| ';
+      cells.forEach(cell => {
+        const cellContent = cell.textContent.trim().replace(/\n/g, ' ');
+        markdown += cellContent + ' | ';
+      });
+      markdown += '\n';
+      
+      if (isHeaderRow) {
+        markdown += '| ';
+        cells.forEach(() => {
+          markdown += '--- | ';
+        });
+        markdown += '\n';
+      }
+    });
+    
+    return markdown + '\n';
+  }
+});
+
+turndownService.use(gfm);
 
 const isMac = computed(() => {
   return typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
@@ -479,10 +513,8 @@ async function exportMarkdown() {
   if (!activeFile.value) return;
   
   try {
-    // Convert HTML to Markdown
     const markdown = turndownService.turndown(activeFile.value.content);
     
-    // Create and download the file
     const blob = new Blob([markdown], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
