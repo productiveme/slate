@@ -228,6 +228,7 @@ import { Icon } from '@iconify/vue';
 import Modal from '../components/Modal.vue';
 import GitHubConfigModal from '../components/GitHubConfigModal.vue';
 import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 import { useStorage } from '../composables/useStorage';
 import { useEventListener } from '@vueuse/core';
 import posthog from 'posthog-js';
@@ -237,7 +238,6 @@ const SETTINGS = {
   SIDEBAR_STATE: 'sidebarState'
 };
 
-// Initialize turndown service for HTML to Markdown conversion
 const turndownService = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced',
@@ -245,6 +245,8 @@ const turndownService = new TurndownService({
   bulletListMarker: '-',
   strongDelimiter: '**'
 });
+
+turndownService.use(gfm);
 
 const isMac = computed(() => {
   return typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
