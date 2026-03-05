@@ -34,16 +34,17 @@ export function signGitHubConfigs(store: GitHubConfigStore): string {
 export function verifyGitHubConfigs(token: string): GitHubConfigStore | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
-    if (decoded.configs && Array.isArray(decoded.configs)) {
-      return decoded as unknown as GitHubConfigStore;
+    const { exp, iat, nbf, jti, iss, aud, sub, ...payload } = decoded;
+    if (payload.configs && Array.isArray(payload.configs)) {
+      return payload as unknown as GitHubConfigStore;
     }
-    if (decoded.token && decoded.owner && decoded.repo && decoded.branch) {
+    if (payload.token && payload.owner && payload.repo && payload.branch) {
       return {
         configs: [{
-          token: decoded.token as string,
-          owner: decoded.owner as string,
-          repo: decoded.repo as string,
-          branch: decoded.branch as string
+          token: payload.token as string,
+          owner: payload.owner as string,
+          repo: payload.repo as string,
+          branch: payload.branch as string
         }],
         activeIndex: 0
       };
