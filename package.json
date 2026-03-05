@@ -40,6 +40,7 @@
     "jspdf": "^3.0.1",
     "localforage": "^1.10.0",
     "lucide-vue": "^0.484.0",
+    "marked": "^17.0.4",
     "nuxt": "^4.1.2",
     "openai": "^4.89.0",
     "posthog-js": "^1.233.1",
