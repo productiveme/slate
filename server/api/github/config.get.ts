@@ -1,11 +1,11 @@
 import { defineEventHandler } from '#imports';
-import { getGitHubConfigFromRequest } from '~/server/utils/jwt';
+import { getGitHubConfigStoreFromRequest } from '~/server/utils/jwt';
 
 export default defineEventHandler(async (event) => {
   try {
-    const config = getGitHubConfigFromRequest(event);
+    const store = getGitHubConfigStoreFromRequest(event);
 
-    if (!config) {
+    if (!store || store.configs.length === 0) {
       return {
         success: false,
         configured: false,
@@ -13,14 +13,23 @@ export default defineEventHandler(async (event) => {
       };
     }
 
+    const activeIndex = Math.min(store.activeIndex, store.configs.length - 1);
+    const activeConfig = store.configs[activeIndex];
+
     return {
       success: true,
       configured: true,
       config: {
-        owner: config.owner,
-        repo: config.repo,
-        branch: config.branch
-      }
+        owner: activeConfig.owner,
+        repo: activeConfig.repo,
+        branch: activeConfig.branch
+      },
+      repos: store.configs.map(c => ({
+        owner: c.owner,
+        repo: c.repo,
+        branch: c.branch
+      })),
+      activeIndex
     };
   } catch (error) {
     console.error('Error verifying GitHub config:', error);

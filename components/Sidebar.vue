@@ -67,12 +67,53 @@
       :class="{ 'justify-center': isCollapsed }"
     >
       <div class="flex items-center justify-between w-full" :class="{ 'justify-center': isCollapsed }">
-        <span 
-          v-if="!isCollapsed" 
-          class="font-bold text-sm text-slate-700 truncate"
-        >
-          {{ repoName }}
-        </span>
+        <div v-if="!isCollapsed" class="relative flex-1 min-w-0 mr-2" ref="repoDropdownRef">
+          <button
+            @click="showRepoDropdown = !showRepoDropdown"
+            class="flex items-center gap-1 font-bold text-sm text-slate-700 truncate hover:text-slate-900 transition-colors max-w-full"
+            title="Switch repository"
+          >
+            <span class="truncate">{{ activeRepo?.repo || repoName }}</span>
+            <Icon icon="lucide:chevrons-up-down" class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          </button>
+          <div
+            v-if="showRepoDropdown"
+            class="absolute left-0 top-full mt-1 w-64 bg-white rounded-lg border border-slate-200 shadow-lg z-50 py-1"
+          >
+            <div
+              v-for="(repo, index) in repos"
+              :key="index"
+              class="flex items-center justify-between px-3 py-2 hover:bg-slate-50 cursor-pointer group"
+              @click.stop="handleSwitchRepo(index)"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <Icon
+                  :icon="index === activeRepoIndex ? 'lucide:check' : 'lucide:git-branch'"
+                  class="w-3.5 h-3.5 flex-shrink-0"
+                  :class="index === activeRepoIndex ? 'text-slate-900' : 'text-slate-400'"
+                />
+                <span class="text-sm text-slate-700 truncate">{{ repo.repo }}</span>
+                <span class="text-xs text-slate-400 truncate hidden group-hover:block">{{ repo.owner }}</span>
+              </div>
+              <button
+                @click.stop="handleDisconnectRepo(index)"
+                class="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 rounded transition-all flex-shrink-0"
+                title="Disconnect repository"
+              >
+                <Icon icon="lucide:log-out" class="w-3 h-3" />
+              </button>
+            </div>
+            <div class="border-t border-slate-100 mt-1 pt-1">
+              <button
+                @click.stop="handleAddRepo"
+                class="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+              >
+                <Icon icon="lucide:plus" class="w-3.5 h-3.5" />
+                Connect another repository
+              </button>
+            </div>
+          </div>
+        </div>
         
         <!-- Collapse/Expand Button -->
         <button 
@@ -162,7 +203,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { Icon } from '@iconify/vue';
 import Modal from './Modal.vue';
 import { useStorage } from '../composables/useStorage';
@@ -183,6 +224,14 @@ const props = defineProps({
   repoName: {
     type: String,
     default: 'Slate'
+  },
+  repos: {
+    type: Array,
+    default: () => []
+  },
+  activeRepoIndex: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -191,8 +240,47 @@ const emit = defineEmits([
   'create-file',
   'toggle-sidebar',
   'delete-file',
-  'rename-file'
+  'rename-file',
+  'switch-repo',
+  'add-repo',
+  'disconnect-repo'
 ]);
+
+const activeRepo = computed(() => props.repos[props.activeRepoIndex] || null);
+
+const showRepoDropdown = ref(false);
+const repoDropdownRef = ref(null);
+
+function handleClickOutside(event) {
+  if (repoDropdownRef.value && !repoDropdownRef.value.contains(event.target)) {
+    showRepoDropdown.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
+
+function handleSwitchRepo(index) {
+  showRepoDropdown.value = false;
+  if (index !== props.activeRepoIndex) {
+    emit('switch-repo', index);
+  }
+}
+
+function handleAddRepo() {
+  showRepoDropdown.value = false;
+  emit('add-repo');
+}
+
+function handleDisconnectRepo(index) {
+  showRepoDropdown.value = false;
+  emit('disconnect-repo', index);
+}
 
 // Modal states
 const showNewFileModal = ref(false);
@@ -237,7 +325,6 @@ function handleCreateFile() {
 
 function handleRenameFile() {
   if (newFileName.value.trim() && fileToRename.value) {
-    // Preserve the current content and other properties
     const updatedFile = {
       ...fileToRename.value,
       name: newFileName.value.trim(),
@@ -254,7 +341,6 @@ function handleRenameFile() {
 
 async function handleDeleteFile() {
   if (fileToDelete.value) {
-    // Remove file content from IndexedDB
     await storage.deleteDocument(fileToDelete.value.id);
     emit('delete-file', fileToDelete.value);
     showDeleteModal.value = false;

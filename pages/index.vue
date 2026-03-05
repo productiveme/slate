@@ -86,6 +86,11 @@
         @delete-file="deleteFile"
         @rename-file="handleFileRename"
         :repo-name="githubRepoName"
+        :repos="githubRepos"
+        :active-repo-index="githubActiveRepoIndex"
+        @switch-repo="handleSwitchRepo"
+        @add-repo="handleAddRepo"
+        @disconnect-repo="handleDisconnectRepo"
       />
     </div>
     
@@ -293,6 +298,8 @@ const showGitHubConfigModal = ref(false);
 const githubConfigured = ref(false);
 const githubRepoUrl = ref('');
 const githubRepoName = ref('Slate');
+const githubRepos = ref([]);
+const githubActiveRepoIndex = ref(0);
 const searchQuery = ref('');
 let searchDebounceTimer = null;
 
@@ -332,6 +339,8 @@ onMounted(async () => {
     if (configResponse.configured && configResponse.config) {
       githubRepoUrl.value = `https://github.com/${configResponse.config.owner}/${configResponse.config.repo}`;
       githubRepoName.value = configResponse.config.repo;
+      githubRepos.value = configResponse.repos || [configResponse.config];
+      githubActiveRepoIndex.value = configResponse.activeIndex ?? 0;
     }
     
     if (!githubConfigured.value) {
@@ -622,6 +631,8 @@ async function handleGitHubConfigSaved() {
   if (configResponse.configured && configResponse.config) {
     githubRepoUrl.value = `https://github.com/${configResponse.config.owner}/${configResponse.config.repo}`;
     githubRepoName.value = configResponse.config.repo;
+    githubRepos.value = configResponse.repos || [configResponse.config];
+    githubActiveRepoIndex.value = configResponse.activeIndex ?? 0;
   }
   
   await syncFromGitHub();
@@ -640,6 +651,53 @@ async function handleGitHubConfigSaved() {
     activeFile.value = files.value[0];
   } else {
     activeFile.value = null;
+  }
+}
+
+async function handleSwitchRepo(index) {
+  try {
+    const response = await $fetch('/api/github/switch', {
+      method: 'POST',
+      body: { index }
+    });
+    if (response.success && response.config) {
+      githubRepoUrl.value = `https://github.com/${response.config.owner}/${response.config.repo}`;
+      githubRepoName.value = response.config.repo;
+      githubRepos.value = response.repos || [];
+      githubActiveRepoIndex.value = response.activeIndex ?? index;
+      await syncFromGitHub();
+    }
+  } catch (error) {
+    console.error('Error switching repository:', error);
+  }
+}
+
+function handleAddRepo() {
+  showGitHubConfigModal.value = true;
+}
+
+async function handleDisconnectRepo(index) {
+  try {
+    const response = await $fetch('/api/github/disconnect', {
+      method: 'POST',
+      body: { index }
+    });
+    if (!response.configured) {
+      githubConfigured.value = false;
+      githubRepoUrl.value = '';
+      githubRepoName.value = 'Slate';
+      githubRepos.value = [];
+      githubActiveRepoIndex.value = 0;
+      showGitHubConfigModal.value = true;
+    } else if (response.config) {
+      githubRepoUrl.value = `https://github.com/${response.config.owner}/${response.config.repo}`;
+      githubRepoName.value = response.config.repo;
+      githubRepos.value = response.repos || [];
+      githubActiveRepoIndex.value = response.activeIndex ?? 0;
+      await syncFromGitHub();
+    }
+  } catch (error) {
+    console.error('Error disconnecting repository:', error);
   }
 }
 

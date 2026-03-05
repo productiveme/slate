@@ -1,5 +1,6 @@
-import { defineEventHandler, readBody, setCookie } from '#imports';
-import { signGitHubConfig } from '~/server/utils/jwt';
+import { defineEventHandler, readBody } from '#imports';
+import { getGitHubConfigStoreFromRequest, setGitHubConfigStore } from '~/server/utils/jwt';
+import type { GitHubConfig, GitHubConfigStore } from '~/server/utils/jwt';
 
 interface GitHubConfigRequest {
   token: string;
@@ -19,20 +20,33 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    const jwt = signGitHubConfig({
+    const newConfig: GitHubConfig = {
       token: body.token,
       owner: body.owner,
       repo: body.repo,
       branch: body.branch
-    });
+    };
 
-    setCookie(event, 'github_config', jwt, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365,
-      path: '/'
-    });
+    const existingStore = getGitHubConfigStoreFromRequest(event);
+    let store: GitHubConfigStore;
+
+    if (existingStore) {
+      const existingIndex = existingStore.configs.findIndex(
+        c => c.owner === newConfig.owner && c.repo === newConfig.repo
+      );
+      if (existingIndex !== -1) {
+        existingStore.configs[existingIndex] = newConfig;
+        existingStore.activeIndex = existingIndex;
+      } else {
+        existingStore.configs.push(newConfig);
+        existingStore.activeIndex = existingStore.configs.length - 1;
+      }
+      store = existingStore;
+    } else {
+      store = { configs: [newConfig], activeIndex: 0 };
+    }
+
+    setGitHubConfigStore(event, store);
 
     return {
       success: true,
