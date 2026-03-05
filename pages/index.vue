@@ -581,6 +581,29 @@ async function syncFromGitHub() {
   try {
     await storage.syncFromGitHub();
     lastSyncTime.value = new Date();
+    
+    const savedFiles = await storage.getFiles();
+    files.value = savedFiles;
+    
+    for (const file of files.value) {
+      const content = await storage.getDocument(file.id);
+      if (content) {
+        file.content = content;
+      }
+    }
+    
+    if (files.value.length > 0 && !activeFile.value) {
+      activeFile.value = files.value[0];
+    } else if (activeFile.value) {
+      const updatedActiveFile = files.value.find(f => f.id === activeFile.value.id);
+      if (updatedActiveFile) {
+        activeFile.value = updatedActiveFile;
+      } else if (files.value.length > 0) {
+        activeFile.value = files.value[0];
+      } else {
+        activeFile.value = null;
+      }
+    }
   } catch (error) {
     console.error('Error syncing from GitHub:', error);
     if (error?.statusCode === 401) {
@@ -602,6 +625,22 @@ async function handleGitHubConfigSaved() {
   }
   
   await syncFromGitHub();
+  
+  const savedFiles = await storage.getFiles();
+  files.value = savedFiles;
+  
+  for (const file of files.value) {
+    const content = await storage.getDocument(file.id);
+    if (content) {
+      file.content = content;
+    }
+  }
+  
+  if (files.value.length > 0) {
+    activeFile.value = files.value[0];
+  } else {
+    activeFile.value = null;
+  }
 }
 
 function handleSearch() {

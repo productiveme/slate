@@ -72,7 +72,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'save']);
+const emit = defineEmits(['close', 'saved']);
 
 const config = ref({
   token: '',
@@ -98,7 +98,7 @@ async function handleSave() {
     });
     
     if (response.success) {
-      emit('save', config.value);
+      emit('saved', config.value);
       emit('close');
     } else {
       errorMessage.value = response.error || 'Failed to save configuration';
