@@ -248,6 +248,17 @@ const turndownService = new TurndownService({
 
 turndownService.use(gfm);
 
+turndownService.addRule('tableCellParagraph', {
+  filter: (node) => {
+    return node.nodeName === 'P' && 
+           node.parentNode && 
+           (node.parentNode.nodeName === 'TD' || node.parentNode.nodeName === 'TH');
+  },
+  replacement: (content) => {
+    return content;
+  }
+});
+
 const isMac = computed(() => {
   return typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 });
