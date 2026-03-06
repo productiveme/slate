@@ -243,8 +243,14 @@ const turndownService = new TurndownService({
   codeBlockStyle: 'fenced',
   emDelimiter: '*',
   bulletListMarker: '-',
-  strongDelimiter: '**'
+  strongDelimiter: '**',
+  br: '\n',
+  blankReplacement: (content, node) => {
+    return node.isBlock ? '\n\n' : '';
+  }
 });
+
+turndownService.use(gfm);
 
 turndownService.addRule('tableCellParagraph', {
   filter: (node) => {
@@ -290,8 +296,6 @@ turndownService.addRule('tiptapTable', {
     return markdown + '\n';
   }
 });
-
-turndownService.use(gfm);
 
 const isMac = computed(() => {
   return typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
