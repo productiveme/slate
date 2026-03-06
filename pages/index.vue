@@ -555,7 +555,7 @@ async function exportPDF() {
     
     const options = {
       margin: [15, 15],
-      filename: `${activeFile.value.name}.pdf`,
+      filename: `${activeFile.value.name.replace(/\.md$/, '')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { 
         scale: 2,
