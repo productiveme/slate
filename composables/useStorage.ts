@@ -21,6 +21,19 @@ interface GitHubFile {
   sha: string;
 }
 
+export interface GitHubFolderEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'folder';
+  sha: string;
+}
+
+export interface GitHubFolderResult {
+  path: string;
+  folders: GitHubFolderEntry[];
+  files: GitHubFolderEntry[];
+}
+
 interface StorageInterface {
   saveDocument(id: string, content: string): Promise<void>;
   getDocument(id: string): Promise<string | null>;
@@ -30,6 +43,8 @@ interface StorageInterface {
   saveFiles(files: SlateFile[]): Promise<void>;
   getFiles(): Promise<SlateFile[]>;
   syncFromGitHub(): Promise<void>;
+  listGitHubFolder(folderPath: string): Promise<GitHubFolderResult>;
+  fetchGitHubFileContent(file: GitHubFile): Promise<string>;
   commitToGitHub(fileId: string, filePath: string, content: string): Promise<void>;
 }
 
@@ -190,14 +205,6 @@ export function useStorage(): StorageReturn {
 
         await storage.saveFiles(files);
 
-        for (const file of response.files) {
-          const contentResponse = await $fetch<{ success: boolean; content: string }>(`/api/github/file?path=${encodeURIComponent(file.path)}`);
-          
-          if (contentResponse.success) {
-            await documentStore.setItem(file.sha, contentResponse.content);
-          }
-        }
-
         lastSyncTime.value = new Date().toISOString();
         await settingsStore.setItem('lastSyncTime', lastSyncTime.value);
       } catch (error: any) {
@@ -209,6 +216,31 @@ export function useStorage(): StorageReturn {
       } finally {
         isSyncing.value = false;
       }
+    },
+
+    async listGitHubFolder(folderPath: string): Promise<GitHubFolderResult> {
+      const response = await $fetch<{ success: boolean; path: string; folders: GitHubFolderEntry[]; files: GitHubFolderEntry[] }>(
+        `/api/github/folder?path=${encodeURIComponent(folderPath)}`
+      );
+      return { path: response.path, folders: response.folders, files: response.files };
+    },
+
+    async fetchGitHubFileContent(file: GitHubFile): Promise<string> {
+      if (!isReady.value) await initStorage();
+
+      const cached = await documentStore.getItem<string>(file.sha);
+      if (cached) return cached;
+
+      const contentResponse = await $fetch<{ success: boolean; content: string }>(
+        `/api/github/file?path=${encodeURIComponent(file.path)}`
+      );
+
+      if (contentResponse.success) {
+        await documentStore.setItem(file.sha, contentResponse.content);
+        return contentResponse.content;
+      }
+
+      return '';
     },
 
     async commitToGitHub(fileId: string, filePath: string, content: string): Promise<void> {

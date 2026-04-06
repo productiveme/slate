@@ -78,6 +78,7 @@
     >
       <Sidebar 
         :files="filteredFiles" 
+        :folders="folders"
         :activeFile="activeFile" 
         @select-file="selectFile" 
         @create-file="createFile" 
@@ -91,6 +92,9 @@
         @switch-repo="handleSwitchRepo"
         @add-repo="handleAddRepo"
         @disconnect-repo="handleDisconnectRepo"
+        :current-folder-path="currentFolderPath"
+        :is-folder-loading="isFolderLoading"
+        @navigate-folder="navigateToFolder"
       />
     </div>
     
@@ -229,6 +233,7 @@ import Modal from '../components/Modal.vue';
 import GitHubConfigModal from '../components/GitHubConfigModal.vue';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { marked } from 'marked';
 import { useStorage } from '../composables/useStorage';
 import { useEventListener } from '@vueuse/core';
 import posthog from 'posthog-js';
@@ -338,6 +343,9 @@ const templates = [
 ];
 
 const files = ref([]);
+const folders = ref([]);
+const currentFolderPath = ref('');
+const isFolderLoading = ref(false);
 const activeFile = ref(null);
 const editorRef = ref(null);
 const isSidebarOpen = ref(true);
@@ -365,8 +373,7 @@ const filteredFiles = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return files.value.filter(file => {
     const nameMatch = file.name.toLowerCase().includes(query);
-    const contentMatch = file.content?.toLowerCase().includes(query);
-    return nameMatch || contentMatch;
+    return nameMatch;
   });
 });
 
@@ -405,33 +412,25 @@ onMounted(async () => {
     }
     
     if (githubConfigured.value) {
-      await syncFromGitHub();
-    }
-    
-    const savedFiles = await storage.getFiles();
-    files.value = savedFiles;
-    
-    for (const file of files.value) {
-      const content = await storage.getDocument(file.id);
-      if (content) {
-        file.content = content;
-      }
-    }
-    
-    if (files.value.length > 0) {
-      activeFile.value = files.value[0];
+      await navigateToFolder('');
     } else {
-      await createFile('Getting Started', `
-        <h1>Welcome to Slate</h1>
-        <p>This is your first document. Here are some things you can do:</p>
-        <ul>
-          <li>Write your content in markdown</li>
-          <li>Use the formatting tools above to style your text</li>
-          <li>Create new documents using the sidebar</li>
-          <li>Export your documents as Markdown or PDF</li>
-          <li>Your documents are automatically saved and synced to GitHub</li>
-        </ul>
-      `.trim());
+      const savedFiles = await storage.getFiles();
+      files.value = savedFiles;
+      if (files.value.length > 0) {
+        activeFile.value = files.value[0];
+      } else {
+        await createFile('Getting Started', `
+          <h1>Welcome to Slate</h1>
+          <p>This is your first document. Here are some things you can do:</p>
+          <ul>
+            <li>Write your content in markdown</li>
+            <li>Use the formatting tools above to style your text</li>
+            <li>Create new documents using the sidebar</li>
+            <li>Export your documents as Markdown or PDF</li>
+            <li>Your documents are automatically saved and synced to GitHub</li>
+          </ul>
+        `.trim());
+      }
     }
   } catch (error) {
     console.error('Error loading data:', error);
@@ -440,9 +439,16 @@ onMounted(async () => {
 
 async function selectFile(file) {
   if (!file.content) {
-    const content = await storage.getDocument(file.id);
-    if (content) {
-      file.content = content;
+    if (githubConfigured.value && file.path) {
+      const markdown = await storage.fetchGitHubFileContent({ id: file.id, name: file.name, path: file.path, sha: file.sha });
+      if (markdown) {
+        file.content = marked(markdown);
+      }
+    } else {
+      const content = await storage.getDocument(file.id);
+      if (content) {
+        file.content = content;
+      }
     }
   }
   activeFile.value = file;
@@ -656,33 +662,40 @@ function handleFileRename(file) {
   }
 }
 
+async function navigateToFolder(folderPath) {
+  currentFolderPath.value = folderPath;
+  isFolderLoading.value = true;
+  files.value = [];
+  folders.value = [];
+  try {
+    const result = await storage.listGitHubFolder(folderPath);
+    folders.value = result.folders;
+    files.value = result.files.map(f => ({
+      id: f.sha || f.path,
+      name: f.name,
+      path: f.path,
+      sha: f.sha,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('Error navigating to folder:', error);
+    if (error?.statusCode === 401) {
+      showGitHubConfigModal.value = true;
+    }
+  } finally {
+    isFolderLoading.value = false;
+  }
+}
+
 async function syncFromGitHub() {
   isSyncing.value = true;
   try {
-    await storage.syncFromGitHub();
     lastSyncTime.value = new Date();
-    
-    const savedFiles = await storage.getFiles();
-    files.value = savedFiles;
-    
-    for (const file of files.value) {
-      const content = await storage.getDocument(file.id);
-      if (content) {
-        file.content = content;
-      }
-    }
-    
-    if (files.value.length > 0 && !activeFile.value) {
-      activeFile.value = files.value[0];
-    } else if (activeFile.value) {
-      const updatedActiveFile = files.value.find(f => f.id === activeFile.value.id);
-      if (updatedActiveFile) {
-        activeFile.value = updatedActiveFile;
-      } else if (files.value.length > 0) {
-        activeFile.value = files.value[0];
-      } else {
-        activeFile.value = null;
-      }
+    await navigateToFolder(currentFolderPath.value);
+    if (activeFile.value) {
+      activeFile.value = { ...activeFile.value, content: undefined };
+      await selectFile(activeFile.value);
     }
   } catch (error) {
     console.error('Error syncing from GitHub:', error);
@@ -706,23 +719,8 @@ async function handleGitHubConfigSaved() {
     githubActiveRepoIndex.value = configResponse.activeIndex ?? 0;
   }
   
-  await syncFromGitHub();
-  
-  const savedFiles = await storage.getFiles();
-  files.value = savedFiles;
-  
-  for (const file of files.value) {
-    const content = await storage.getDocument(file.id);
-    if (content) {
-      file.content = content;
-    }
-  }
-  
-  if (files.value.length > 0) {
-    activeFile.value = files.value[0];
-  } else {
-    activeFile.value = null;
-  }
+  activeFile.value = null;
+  await navigateToFolder('');
 }
 
 async function handleSwitchRepo(index) {
@@ -736,7 +734,8 @@ async function handleSwitchRepo(index) {
       githubRepoName.value = response.config.repo;
       githubRepos.value = response.repos || [];
       githubActiveRepoIndex.value = response.activeIndex ?? index;
-      await syncFromGitHub();
+      activeFile.value = null;
+      await navigateToFolder('');
     }
   } catch (error) {
     console.error('Error switching repository:', error);
@@ -765,7 +764,8 @@ async function handleDisconnectRepo(index) {
       githubRepoName.value = response.config.repo;
       githubRepos.value = response.repos || [];
       githubActiveRepoIndex.value = response.activeIndex ?? 0;
-      await syncFromGitHub();
+      activeFile.value = null;
+      await navigateToFolder('');
     }
   } catch (error) {
     console.error('Error disconnecting repository:', error);

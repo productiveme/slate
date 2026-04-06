@@ -39,9 +39,21 @@ interface GitHubConfig {
   branch: string;
 }
 
-export async function listGitHubFiles(config: GitHubConfig): Promise<GitHubFile[]> {
+export interface GitHubFolderEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'folder';
+  sha: string;
+}
+
+export interface GitHubTreeResult {
+  folders: GitHubFolderEntry[];
+  files: GitHubFolderEntry[];
+}
+
+async function fetchFullTree(config: GitHubConfig): Promise<GitHubTreeItem[]> {
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/git/trees/${config.branch}?recursive=1`;
-  
+
   const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${config.token}`,
@@ -55,8 +67,60 @@ export async function listGitHubFiles(config: GitHubConfig): Promise<GitHubFile[
   }
 
   const data = await response.json();
-  
-  return data.tree
+  return data.tree as GitHubTreeItem[];
+}
+
+export async function listGitHubFolder(config: GitHubConfig, folderPath: string = ''): Promise<GitHubTreeResult> {
+  const tree = await fetchFullTree(config);
+
+  const prefix = folderPath ? `${folderPath}/` : '';
+
+  const seenFolders = new Set<string>();
+  const folders: GitHubFolderEntry[] = [];
+  const files: GitHubFolderEntry[] = [];
+
+  for (const item of tree) {
+    if (!item.path.startsWith(prefix)) continue;
+
+    const relative = item.path.slice(prefix.length);
+    const parts = relative.split('/');
+
+    if (parts.length === 1) {
+      if (item.type === 'blob' && item.path.endsWith('.md')) {
+        files.push({
+          name: parts[0],
+          path: item.path,
+          type: 'file',
+          sha: item.sha || ''
+        });
+      }
+    } else {
+      const topFolder = parts[0];
+      const folderFullPath = prefix + topFolder;
+      if (!seenFolders.has(folderFullPath)) {
+        const hasMd = tree.some(
+          t => t.type === 'blob' && t.path.endsWith('.md') && t.path.startsWith(folderFullPath + '/')
+        );
+        if (hasMd) {
+          seenFolders.add(folderFullPath);
+          folders.push({
+            name: topFolder,
+            path: folderFullPath,
+            type: 'folder',
+            sha: ''
+          });
+        }
+      }
+    }
+  }
+
+  return { folders, files };
+}
+
+export async function listGitHubFiles(config: GitHubConfig): Promise<GitHubFile[]> {
+  const tree = await fetchFullTree(config);
+
+  return tree
     .filter((item: GitHubTreeItem) => item.type === 'blob' && item.path.endsWith('.md'))
     .map((item: GitHubTreeItem) => ({
       name: item.path.split('/').pop() || item.path,
