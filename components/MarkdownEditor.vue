@@ -190,9 +190,6 @@ const saveStatus = ref('');
 // Track if initial content is loaded
 const isInitialContentLoaded = ref(false);
 
-// Auto-save debounce timer
-let autoSaveTimer = null;
-
 // Create the editor
 const editor = useEditor({
   content: props.modelValue,

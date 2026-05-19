@@ -164,15 +164,37 @@ export async function commitGitHubFile(
 ): Promise<GitHubCommitResponse> {
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
   
+  let currentSha = sha;
+  
+  try {
+    const existingFile = await fetch(`${url}?ref=${config.branch}`, {
+      headers: {
+        'Authorization': `Bearer ${config.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Slate-App'
+      }
+    });
+    
+    if (existingFile.ok) {
+      const fileData: GitHubFileContent = await existingFile.json();
+      currentSha = fileData.sha;
+      console.log(`Fetched latest SHA for ${path}: ${currentSha}`);
+    }
+  } catch (error) {
+    console.log(`Could not fetch existing file ${path}, may be creating new file`);
+  }
+  
   const body: Record<string, string> = {
     message,
     content: Buffer.from(content).toString('base64'),
     branch: config.branch
   };
 
-  if (sha) {
-    body.sha = sha;
+  if (currentSha) {
+    body.sha = currentSha;
   }
+
+  console.log(`Committing ${path} with SHA: ${currentSha || 'none (new file)'}`);
 
   const response = await fetch(url, {
     method: 'PUT',
@@ -187,10 +209,13 @@ export async function commitGitHubFile(
 
   if (!response.ok) {
     const errorData = await response.json();
+    console.error(`GitHub API error for ${path}:`, errorData);
     throw new Error(`GitHub API error: ${response.status} ${errorData.message || response.statusText}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+  console.log(`Successfully committed ${path}, new SHA: ${result.content.sha}`);
+  return result;
 }
 
 export async function deleteGitHubFile(

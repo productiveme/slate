@@ -80,10 +80,6 @@ const props = defineProps({
   deleteNode: {
     type: Function,
     required: true
-  },
-  editor: {
-    type: Object,
-    required: true
   }
 });
 
@@ -118,10 +114,6 @@ function saveChanges() {
         data: {}
       });
       isEditing.value = false;
-      
-      nextTick(() => {
-        props.editor.commands.focus();
-      });
       return;
     }
     
@@ -130,10 +122,6 @@ function saveChanges() {
       data: parsed || {}
     });
     isEditing.value = false;
-    
-    nextTick(() => {
-      props.editor.commands.focus();
-    });
   } catch (error) {
     console.error('Error parsing YAML:', error);
     alert('Invalid YAML format. Please check your syntax.');
