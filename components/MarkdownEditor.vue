@@ -67,12 +67,106 @@ import { useStorage } from '../composables/useStorage';
 import FloatingToolbar from './FloatingToolbar.vue';
 import { useEventListener } from '@vueuse/core';
 import { marked } from 'marked';
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
+import { Frontmatter } from '../extensions/Frontmatter';
+import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter';
 
 const { storage } = useStorage();
 
+const currentFrontmatter = ref(null);
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  emDelimiter: '*',
+  bulletListMarker: '-',
+  strongDelimiter: '**',
+  br: '\n'
+});
+
+turndownService.use(gfm);
+
+turndownService.addRule('frontmatter', {
+  filter: (node) => {
+    return node.getAttribute && node.getAttribute('data-type') === 'frontmatter';
+  },
+  replacement: () => {
+    return '';
+  }
+});
+
+turndownService.addRule('tableCellParagraph', {
+  filter: (node) => {
+    return node.nodeName === 'P' && 
+           node.parentNode && 
+           (node.parentNode.nodeName === 'TD' || node.parentNode.nodeName === 'TH');
+  },
+  replacement: (content) => {
+    return content;
+  }
+});
+
 function markdownToHTML(markdown) {
   if (!markdown) return '';
-  return marked(markdown);
+  
+  const { frontmatter, content, hasFrontmatter } = parseFrontmatter(markdown);
+  
+  currentFrontmatter.value = frontmatter;
+  
+  return marked(content);
+}
+
+function setEditorContent(content) {
+  if (!editor.value || !content) return;
+  
+  const isHTML = content.trim().startsWith('<');
+  
+  if (isHTML) {
+    editor.value.commands.setContent(content);
+  } else {
+    const { frontmatter, content: markdownContent } = parseFrontmatter(content);
+    const htmlContent = marked(markdownContent);
+    
+    editor.value.commands.setContent(htmlContent);
+    
+    if (frontmatter && Object.keys(frontmatter).length > 0) {
+      nextTick(() => {
+        editor.value?.commands.setFrontmatter(frontmatter);
+      });
+    }
+    
+    currentFrontmatter.value = frontmatter;
+  }
+}
+
+function extractFrontmatterFromEditor() {
+  if (!editor.value) return null;
+  
+  const { doc } = editor.value.state;
+  let frontmatterData = null;
+  
+  doc.descendants((node) => {
+    if (node.type.name === 'frontmatter' && node.attrs.data) {
+      frontmatterData = node.attrs.data;
+      return false;
+    }
+  });
+  
+  return frontmatterData;
+}
+
+function htmlToMarkdown(html) {
+  if (!html) return '';
+  
+  let markdown = turndownService.turndown(html);
+  
+  const frontmatterData = extractFrontmatterFromEditor();
+  if (frontmatterData && Object.keys(frontmatterData).length > 0) {
+    markdown = stringifyFrontmatter(frontmatterData, markdown);
+  }
+  
+  return markdown;
 }
 
 const props = defineProps({
@@ -95,6 +189,9 @@ const saveStatus = ref('');
 
 // Track if initial content is loaded
 const isInitialContentLoaded = ref(false);
+
+// Auto-save debounce timer
+let autoSaveTimer = null;
 
 // Create the editor
 const editor = useEditor({
@@ -123,6 +220,7 @@ const editor = useEditor({
         markdown: true
       }
     }),
+    Frontmatter,
     Placeholder.configure({
       placeholder: 'Start writing...'
     }),
@@ -294,14 +392,15 @@ defineExpose({
   formatMenuItems,
   listMenuItems,
   insertMenuItems,
-  saveContent
+  saveContent,
+  currentFrontmatter
 });
 
 onMounted(async () => {
   try {
     const savedContent = await storage.getDocument(props.fileId);
     if (savedContent && editor.value && !isInitialContentLoaded.value) {
-      editor.value.commands.setContent(markdownToHTML(savedContent));
+      setEditorContent(savedContent);
       isInitialContentLoaded.value = true;
     }
   } catch (error) {
@@ -324,7 +423,7 @@ watch(() => props.fileId, async (newId, oldId) => {
     try {
       const content = await storage.getDocument(newId);
       if (content && editor.value) {
-        editor.value.commands.setContent(markdownToHTML(content));
+        setEditorContent(content);
         
         await nextTick();
         
@@ -356,8 +455,11 @@ async function saveContent() {
   if (!editor.value || !props.fileId) return;
   
   try {
-    const content = editor.value.getHTML();
-    await storage.saveDocument(props.fileId, content);
+    const htmlContent = editor.value.getHTML();
+    const markdownContent = htmlToMarkdown(htmlContent);
+    
+    emit('update:modelValue', htmlContent);
+    await storage.saveDocument(props.fileId, markdownContent);
     
     saveStatus.value = 'saved';
     

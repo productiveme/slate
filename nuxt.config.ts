@@ -28,5 +28,18 @@ export default defineNuxtConfig({
     githubOwner: process.env.GITHUB_OWNER,
     githubRepo: process.env.GITHUB_REPO,
     githubBranch: process.env.GITHUB_BRANCH || 'main',
+  },
+  vite: {
+    define: {
+      'global': 'globalThis',
+    },
+    resolve: {
+      alias: {
+        'buffer': 'buffer'
+      }
+    },
+    optimizeDeps: {
+      include: ['buffer']
+    }
   }
 })

@@ -237,6 +237,7 @@ import { marked } from 'marked';
 import { useStorage } from '../composables/useStorage';
 import { useEventListener } from '@vueuse/core';
 import posthog from 'posthog-js';
+import { stringifyFrontmatter } from '../utils/frontmatter';
 
 // Local Storage Keys
 const SETTINGS = {
@@ -256,6 +257,15 @@ const turndownService = new TurndownService({
 });
 
 turndownService.use(gfm);
+
+turndownService.addRule('frontmatter', {
+  filter: (node) => {
+    return node.getAttribute && node.getAttribute('data-type') === 'frontmatter';
+  },
+  replacement: () => {
+    return '';
+  }
+});
 
 turndownService.addRule('tableCellParagraph', {
   filter: (node) => {
@@ -311,34 +321,31 @@ const templates = [
     name: 'Meeting Notes',
     icon: 'lucide:clipboard-list',
     description: 'Structured template for meetings',
-    content: `<h1>Meeting Notes</h1>
-<p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-<h2>Agenda</h2>
-<ul>
-  <li>Topic 1</li>
-  <li>Topic 2</li>
-</ul>
-<h2>Action Items</h2>
-<ul>
-  <li>[ ] Task 1</li>
-  <li>[ ] Task 2</li>
-</ul>`
+    content: `# Meeting Notes
+
+**Date:** ${new Date().toLocaleDateString()}
+
+## Agenda
+- Topic 1
+- Topic 2
+
+## Action Items
+- [ ] Task 1
+- [ ] Task 2`
   },
   {
     name: 'Project Plan',
     icon: 'lucide:layout-template',
     description: 'Project planning template',
-    content: `<h1>Project Overview</h1>
-<h2>Objectives</h2>
-<ul>
-  <li>Objective 1</li>
-  <li>Objective 2</li>
-</ul>
-<h2>Timeline</h2>
-<ul>
-  <li>Phase 1</li>
-  <li>Phase 2</li>
-</ul>`
+    content: `# Project Overview
+
+## Objectives
+- Objective 1
+- Objective 2
+
+## Timeline
+- Phase 1
+- Phase 2`
   }
 ];
 
@@ -419,16 +426,15 @@ onMounted(async () => {
       if (files.value.length > 0) {
         activeFile.value = files.value[0];
       } else {
-        await createFile('Getting Started', `
-          <h1>Welcome to Slate</h1>
-          <p>This is your first document. Here are some things you can do:</p>
-          <ul>
-            <li>Write your content in markdown</li>
-            <li>Use the formatting tools above to style your text</li>
-            <li>Create new documents using the sidebar</li>
-            <li>Export your documents as Markdown or PDF</li>
-            <li>Your documents are automatically saved and synced to GitHub</li>
-          </ul>
+        await createFile('Getting Started', `# Welcome to Slate
+
+This is your first document. Here are some things you can do:
+
+- Write your content in markdown
+- Use the formatting tools above to style your text
+- Create new documents using the sidebar
+- Export your documents as Markdown or PDF
+- Your documents are automatically saved and synced to GitHub
         `.trim());
       }
     }
@@ -442,12 +448,24 @@ async function selectFile(file) {
     if (githubConfigured.value && file.path) {
       const markdown = await storage.fetchGitHubFileContent({ id: file.id, name: file.name, path: file.path, sha: file.sha });
       if (markdown) {
-        file.content = marked(markdown);
+        await storage.saveDocument(file.id, markdown);
+        file.content = markdown;
       }
     } else {
       const content = await storage.getDocument(file.id);
       if (content) {
         file.content = content;
+      }
+    }
+  } else {
+    const storedContent = await storage.getDocument(file.id);
+    if (storedContent && storedContent.trim().startsWith('<')) {
+      if (githubConfigured.value && file.path) {
+        const markdown = await storage.fetchGitHubFileContent({ id: file.id, name: file.name, path: file.path, sha: file.sha });
+        if (markdown) {
+          await storage.saveDocument(file.id, markdown);
+          file.content = markdown;
+        }
       }
     }
   }
@@ -465,7 +483,7 @@ async function createFile(name, content = '') {
     updatedAt: new Date().toISOString()
   };
   
-  await storage.saveDocument(file.id, content || '<h1>Untitled</h1>');
+  await storage.saveDocument(file.id, content || '# Untitled\n');
 
   files.value.push(file);
   activeFile.value = file;
@@ -491,6 +509,22 @@ function saveFiles() {
   });
 }
 
+function extractFrontmatterFromEditor() {
+  if (!editorRef.value?.editor) return null;
+  
+  const { doc } = editorRef.value.editor.state;
+  let frontmatterData = null;
+  
+  doc.descendants((node) => {
+    if (node.type.name === 'frontmatter' && node.attrs.data) {
+      frontmatterData = node.attrs.data;
+      return false;
+    }
+  });
+  
+  return frontmatterData;
+}
+
 async function handleManualSave() {
   if (!activeFile.value) return;
   
@@ -499,7 +533,13 @@ async function handleManualSave() {
   saveFiles();
   
   if (activeFile.value.path) {
-    const markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = turndownService.turndown(activeFile.value.content);
+    
+    const frontmatterData = extractFrontmatterFromEditor();
+    if (frontmatterData) {
+      markdown = stringifyFrontmatter(frontmatterData, markdown);
+    }
+    
     await storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
       console.error('Error committing to GitHub:', error);
     });
@@ -512,7 +552,13 @@ async function handleEditorSave() {
   saveFiles();
   
   if (activeFile.value.path) {
-    const markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = turndownService.turndown(activeFile.value.content);
+    
+    const frontmatterData = extractFrontmatterFromEditor();
+    if (frontmatterData) {
+      markdown = stringifyFrontmatter(frontmatterData, markdown);
+    }
+    
     await storage.commitToGitHub(activeFile.value.id, activeFile.value.path, markdown).catch(error => {
       console.error('Error committing to GitHub:', error);
     });
@@ -523,7 +569,12 @@ async function exportMarkdown() {
   if (!activeFile.value) return;
   
   try {
-    const markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = turndownService.turndown(activeFile.value.content);
+    
+    const frontmatterData = extractFrontmatterFromEditor();
+    if (frontmatterData) {
+      markdown = stringifyFrontmatter(frontmatterData, markdown);
+    }
     
     const blob = new Blob([markdown], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
