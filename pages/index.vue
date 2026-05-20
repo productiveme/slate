@@ -745,8 +745,16 @@ async function syncFromGitHub() {
     lastSyncTime.value = new Date();
     await navigateToFolder(currentFolderPath.value);
     if (activeFile.value) {
-      activeFile.value = { ...activeFile.value, content: undefined };
-      await selectFile(activeFile.value);
+      if (githubConfigured.value && activeFile.value.path) {
+        await storage.clearDocument(activeFile.value.sha);
+        const markdown = await storage.fetchGitHubFileContent(
+          { id: activeFile.value.id, name: activeFile.value.name, path: activeFile.value.path, sha: activeFile.value.sha }
+        );
+        if (markdown) {
+          await storage.saveDocument(activeFile.value.id, markdown);
+          activeFile.value.content = markdown;
+        }
+      }
     }
   } catch (error) {
     console.error('Error syncing from GitHub:', error);

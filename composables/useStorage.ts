@@ -38,6 +38,7 @@ interface StorageInterface {
   saveDocument(id: string, content: string): Promise<void>;
   getDocument(id: string): Promise<string | null>;
   deleteDocument(id: string): Promise<void>;
+  clearDocument(id: string): Promise<void>;
   saveSetting<T>(key: string, value: T): Promise<void>;
   getSetting<T>(key: string): Promise<T | null>;
   saveFiles(files: SlateFile[]): Promise<void>;
@@ -122,6 +123,16 @@ export function useStorage(): StorageReturn {
         await documentStore.removeItem(id);
       } catch (error) {
         console.error('Error deleting document:', error);
+        throw error;
+      }
+    },
+
+    async clearDocument(id: string): Promise<void> {
+      if (!isReady.value) await initStorage();
+      try {
+        await documentStore.removeItem(id);
+      } catch (error) {
+        console.error('Error clearing document cache:', error);
         throw error;
       }
     },
