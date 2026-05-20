@@ -82,10 +82,47 @@ const turndownService = new TurndownService({
   emDelimiter: '*',
   bulletListMarker: '-',
   strongDelimiter: '**',
+  hr: '---',
   br: '\n'
 });
 
 turndownService.use(gfm);
+
+turndownService.addRule('horizontalRule', {
+  filter: 'hr',
+  replacement: () => {
+    return '\n\n---\n\n';
+  }
+});
+
+turndownService.addRule('preserveComments', {
+  filter: (node) => {
+    return node.nodeType === 8;
+  },
+  replacement: (content, node) => {
+    return `<!--${node.nodeValue}-->`;
+  }
+});
+
+turndownService.addRule('listItem', {
+  filter: 'li',
+  replacement: (content, node, options) => {
+    content = content
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '\n')
+      .replace(/\n/gm, '\n  ');
+    
+    let prefix = options.bulletListMarker + ' ';
+    const parent = node.parentNode;
+    if (parent.nodeName === 'OL') {
+      const start = parent.getAttribute('start');
+      const index = Array.prototype.indexOf.call(parent.children, node);
+      prefix = (start ? Number(start) + index : index + 1) + '. ';
+    }
+    
+    return prefix + content + (node.nextSibling && !/\n$/.test(content) ? '\n' : '');
+  }
+});
 
 turndownService.addRule('frontmatter', {
   filter: (node) => {
@@ -160,6 +197,14 @@ function htmlToMarkdown(html) {
   if (!html) return '';
   
   let markdown = turndownService.turndown(html);
+  
+  markdown = markdown.replace(/\\\[(\d+)\\\]/g, '[$1]');
+  
+  markdown = markdown.replace(/^-   /gm, '- ');
+  markdown = markdown.replace(/^(\d+)\.   /gm, '$1. ');
+  
+  markdown = markdown.replace(/^(- .+)\n\s*\n(?=- )/gm, '$1\n');
+  markdown = markdown.replace(/^(\d+\. .+)\n\s*\n(?=\d+\. )/gm, '$1\n');
   
   const frontmatterData = extractFrontmatterFromEditor();
   if (frontmatterData && Object.keys(frontmatterData).length > 0) {
