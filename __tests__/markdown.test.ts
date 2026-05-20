@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { createTurndownService, htmlToMarkdown, postProcessMarkdown } from './markdown';
+import { createTurndownService, htmlToMarkdown, postProcessMarkdown, renderHorizontalRule } from '../utils/markdown';
 
 describe('Markdown Conversion', () => {
+  describe('renderHorizontalRule', () => {
+    it('should render 3 dashes as normal hr', () => {
+      expect(renderHorizontalRule('---')).toBe('<hr />\n');
+    });
+
+    it('should render 4 dashes with vertical slide data attribute', () => {
+      expect(renderHorizontalRule('----')).toBe('<hr data-slide-type="vertical" />\n');
+    });
+
+    it('should handle whitespace in raw text', () => {
+      expect(renderHorizontalRule('---  ')).toBe('<hr />\n');
+      expect(renderHorizontalRule('  ----  ')).toBe('<hr data-slide-type="vertical" />\n');
+    });
+
+    it('should handle other valid hr formats as normal hr', () => {
+      expect(renderHorizontalRule('***')).toBe('<hr />\n');
+      expect(renderHorizontalRule('___')).toBe('<hr />\n');
+    });
+  });
+
   describe('postProcessMarkdown', () => {
     it('should convert * * * to ---', () => {
       const input = '## Heading\n\n* * *\n\n## Another Heading';
@@ -204,6 +224,42 @@ describe('Markdown Conversion', () => {
       if (listSection) {
         expect(listSection[0]).not.toMatch(/- Point \d\n\n- Point \d/);
       }
+    });
+
+    it('should preserve horizontal slide separators (---)', () => {
+      const html = '<h2>Slide 1</h2><hr><h2>Slide 2</h2>';
+      const result = htmlToMarkdown(html, turndownService);
+      
+      expect(result).toContain('---');
+      expect(result).not.toContain('----');
+    });
+
+    it('should preserve vertical slide separators (----)', () => {
+      const html = '<h2>Slide 1</h2><hr data-slide-type="vertical"><h2>Slide 2</h2>';
+      const result = htmlToMarkdown(html, turndownService);
+      
+      expect(result).toContain('----');
+      expect(result).not.toMatch(/(?<!-)---(?!-)/);
+    });
+
+    it('should handle mixed horizontal and vertical separators', () => {
+      const html = `
+        <h2>Slide 1</h2>
+        <hr>
+        <h2>Slide 2</h2>
+        <hr data-slide-type="vertical">
+        <h2>Slide 2.1</h2>
+        <hr>
+        <h2>Slide 3</h2>
+      `;
+      const result = htmlToMarkdown(html, turndownService);
+      
+      const lines = result.split('\n').map(l => l.trim()).filter(l => l);
+      const horizontalCount = lines.filter(l => l === '---').length;
+      const verticalCount = lines.filter(l => l === '----').length;
+      
+      expect(horizontalCount).toBe(2);
+      expect(verticalCount).toBe(1);
     });
   });
 });

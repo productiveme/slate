@@ -38,6 +38,22 @@ The goal is to verify formatting is preserved.
 
 ### Subsection Title
 
+----
+
+### Vertical Slide Example
+
+This is a vertical slide (sub-slide).
+
+It uses four dashes (----) instead of three.
+
+----
+
+### Another Vertical Slide
+
+This is part of the same vertical stack.
+
+Vertical slides are useful for related content.
+
 ---
 
 ### Bullet Lists

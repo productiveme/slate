@@ -1,4 +1,5 @@
 import TurndownService from 'turndown';
+import { marked } from 'marked';
 
 export interface MarkdownConverterOptions {
   headingStyle?: 'atx' | 'setext';
@@ -7,6 +8,24 @@ export interface MarkdownConverterOptions {
   bulletListMarker?: '-' | '*' | '+';
   strongDelimiter?: '**' | '__';
   hr?: string;
+}
+
+export function renderHorizontalRule(rawText: string): string {
+  const dashCount = rawText.trim().length;
+  
+  if (dashCount === 4) {
+    return '<hr data-slide-type="vertical" />\n';
+  }
+  return '<hr />\n';
+}
+
+export function configureMarked() {
+  const renderer = new marked.Renderer();
+  renderer.hr = function(token) {
+    return renderHorizontalRule(token.raw);
+  };
+
+  marked.use({ renderer });
 }
 
 export function createTurndownService(options: MarkdownConverterOptions = {}): TurndownService {
@@ -29,40 +48,19 @@ export function createTurndownService(options: MarkdownConverterOptions = {}): T
 
   turndownService.addRule('horizontalRule', {
     filter: 'hr',
-    replacement: () => {
+    replacement: (content, node) => {
+      const slideType = node.getAttribute('data-slide-type');
+      if (slideType === 'vertical') {
+        return '\n----\n';
+      }
       return '\n---\n';
     }
   });
 
-  turndownService.addRule('preserveComments', {
-    filter: (node) => {
-      return node.nodeType === 8;
-    },
-    replacement: (content, node) => {
-      return `<!--${node.nodeValue}-->`;
-    }
-  });
-
-  turndownService.addRule('listItem', {
-    filter: 'li',
-    replacement: (content, node, options) => {
-      content = content
-        .replace(/^\n+/, '')
-        .replace(/\n+$/, '\n');
-      
-      const lines = content.split('\n');
-      const processedLines = lines.map((line, i) => i === 0 ? line : '  ' + line);
-      content = processedLines.join('\n');
-      
-      let prefix = options.bulletListMarker + ' ';
-      const parent = node.parentNode;
-      if (parent.nodeName === 'OL') {
-        const start = parent.getAttribute('start');
-        const index = Array.prototype.indexOf.call(parent.children, node);
-        prefix = (start ? Number(start) + index : index + 1) + '. ';
-      }
-      
-      return prefix + content + (node.nextSibling && !/\n$/.test(content) ? '\n' : '');
+  turndownService.addRule('commentPlaceholder', {
+    filter: 'comment-placeholder',
+    replacement: (content) => {
+      return `<comment-placeholder>${content}</comment-placeholder>`;
     }
   });
 
@@ -169,7 +167,16 @@ export function postProcessMarkdown(markdown: string): string {
 export function htmlToMarkdown(html: string, turndownService: TurndownService): string {
   if (!html) return '';
   
-  let markdown = turndownService.turndown(html);
+  let processedHtml = html.replace(/<!--([\s\S]*?)-->/g, (match, content) => {
+    return `<comment-placeholder>${content}</comment-placeholder>`;
+  });
+  
+  let markdown = turndownService.turndown(processedHtml);
+  
+  markdown = markdown.replace(/<comment-placeholder>([\s\S]*?)<\/comment-placeholder>/g, (match, content) => {
+    return `<!--${content}-->`;
+  });
+  
   markdown = postProcessMarkdown(markdown);
   
   return markdown;

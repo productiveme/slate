@@ -3,7 +3,7 @@ import { marked } from 'marked';
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createTurndownService, htmlToMarkdown } from '../utils/markdown.ts';
+import { createTurndownService, htmlToMarkdown, configureMarked } from '../utils/markdown.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,6 +12,8 @@ const testFile = join(__dirname, 'test.md');
 const outputFile = join(__dirname, 'test-output.md');
 
 console.log('🧪 Testing Markdown Conversion\n');
+
+configureMarked();
 
 const originalMarkdown = readFileSync(testFile, 'utf-8');
 console.log('✅ Read original test.md file\n');

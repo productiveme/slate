@@ -69,12 +69,14 @@ import { useEventListener } from '@vueuse/core';
 import { marked } from 'marked';
 import { Frontmatter } from '../extensions/Frontmatter';
 import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter';
-import { createTurndownService, htmlToMarkdown as convertHtmlToMarkdown } from '../utils/markdown';
+import { createTurndownService, htmlToMarkdown as convertHtmlToMarkdown, configureMarked } from '../utils/markdown';
 
 const { storage } = useStorage();
 
 const currentFrontmatter = ref(null);
 const turndownService = createTurndownService();
+
+configureMarked();
 
 function markdownToHTML(markdown) {
   if (!markdown) return '';
