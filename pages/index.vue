@@ -744,15 +744,19 @@ async function syncFromGitHub() {
   try {
     lastSyncTime.value = new Date();
     await navigateToFolder(currentFolderPath.value);
-    if (activeFile.value) {
-      if (githubConfigured.value && activeFile.value.path) {
-        await storage.clearDocument(activeFile.value.sha);
-        const markdown = await storage.fetchGitHubFileContent(
-          { id: activeFile.value.id, name: activeFile.value.name, path: activeFile.value.path, sha: activeFile.value.sha }
-        );
-        if (markdown) {
-          await storage.saveDocument(activeFile.value.id, markdown);
-          activeFile.value.content = markdown;
+    if (activeFile.value && githubConfigured.value && activeFile.value.path) {
+      const currentFileId = activeFile.value.id;
+      await storage.clearDocument(activeFile.value.sha);
+      const markdown = await storage.fetchGitHubFileContent(
+        { id: activeFile.value.id, name: activeFile.value.name, path: activeFile.value.path, sha: activeFile.value.sha }
+      );
+      if (markdown) {
+        await storage.saveDocument(activeFile.value.id, markdown);
+        const fileToReload = files.value.find(f => f.id === currentFileId);
+        if (fileToReload) {
+          activeFile.value = null;
+          await nextTick();
+          await selectFile(fileToReload);
         }
       }
     }
