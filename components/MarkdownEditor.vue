@@ -68,6 +68,7 @@ import FloatingToolbar from './FloatingToolbar.vue';
 import { useEventListener } from '@vueuse/core';
 import { marked } from 'marked';
 import { Frontmatter } from '../extensions/Frontmatter';
+import { RevealHorizontalRule } from '../extensions/RevealHorizontalRule';
 import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter';
 import { createTurndownService, htmlToMarkdown as convertHtmlToMarkdown, configureMarked } from '../utils/markdown';
 
@@ -169,6 +170,7 @@ const editor = useEditor({
       heading: {
         levels: [1, 2, 3]
       },
+      horizontalRule: false,
       code: {
         // HTMLAttributes: {
         //   class: 'inline-code',
@@ -188,6 +190,7 @@ const editor = useEditor({
         markdown: true
       }
     }),
+    RevealHorizontalRule,
     Frontmatter,
     Placeholder.configure({
       placeholder: 'Start writing...'
