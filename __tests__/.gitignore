@@ -1,0 +1,5 @@
+# Generated test output files
+test-output.html
+test-output.md
+test-roundtrip.md
+*.output.*

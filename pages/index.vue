@@ -231,52 +231,19 @@ import { ref, onMounted, nextTick, computed } from 'vue';
 import { Icon } from '@iconify/vue';
 import Modal from '../components/Modal.vue';
 import GitHubConfigModal from '../components/GitHubConfigModal.vue';
-import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
 import { marked } from 'marked';
 import { useStorage } from '../composables/useStorage';
 import { useEventListener } from '@vueuse/core';
 import posthog from 'posthog-js';
 import { stringifyFrontmatter } from '../utils/frontmatter';
+import { createTurndownService, htmlToMarkdown } from '../utils/markdown';
 
 // Local Storage Keys
 const SETTINGS = {
   SIDEBAR_STATE: 'sidebarState'
 };
 
-const turndownService = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  emDelimiter: '*',
-  bulletListMarker: '-',
-  strongDelimiter: '**',
-  br: '\n',
-  blankReplacement: (content, node) => {
-    return node.isBlock ? '\n\n' : '';
-  }
-});
-
-turndownService.use(gfm);
-
-turndownService.addRule('frontmatter', {
-  filter: (node) => {
-    return node.getAttribute && node.getAttribute('data-type') === 'frontmatter';
-  },
-  replacement: () => {
-    return '';
-  }
-});
-
-turndownService.addRule('tableCellParagraph', {
-  filter: (node) => {
-    return node.nodeName === 'P' && 
-           node.parentNode && 
-           (node.parentNode.nodeName === 'TD' || node.parentNode.nodeName === 'TH');
-  },
-  replacement: (content) => {
-    return content;
-  }
-});
+const turndownService = createTurndownService();
 
 turndownService.addRule('tiptapTable', {
   filter: (node) => {
@@ -533,7 +500,7 @@ async function handleManualSave() {
   saveFiles();
   
   if (activeFile.value.path) {
-    let markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = htmlToMarkdown(activeFile.value.content, turndownService);
     
     const frontmatterData = extractFrontmatterFromEditor();
     if (frontmatterData) {
@@ -552,7 +519,7 @@ async function handleEditorSave() {
   saveFiles();
   
   if (activeFile.value.path) {
-    let markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = htmlToMarkdown(activeFile.value.content, turndownService);
     
     const frontmatterData = extractFrontmatterFromEditor();
     if (frontmatterData) {
@@ -569,7 +536,7 @@ async function exportMarkdown() {
   if (!activeFile.value) return;
   
   try {
-    let markdown = turndownService.turndown(activeFile.value.content);
+    let markdown = htmlToMarkdown(activeFile.value.content, turndownService);
     
     const frontmatterData = extractFrontmatterFromEditor();
     if (frontmatterData) {

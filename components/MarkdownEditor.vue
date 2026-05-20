@@ -67,126 +67,14 @@ import { useStorage } from '../composables/useStorage';
 import FloatingToolbar from './FloatingToolbar.vue';
 import { useEventListener } from '@vueuse/core';
 import { marked } from 'marked';
-import TurndownService from 'turndown';
 import { Frontmatter } from '../extensions/Frontmatter';
 import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter';
+import { createTurndownService, htmlToMarkdown as convertHtmlToMarkdown } from '../utils/markdown';
 
 const { storage } = useStorage();
 
 const currentFrontmatter = ref(null);
-
-const turndownService = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  emDelimiter: '*',
-  bulletListMarker: '-',
-  strongDelimiter: '**',
-  hr: '---',
-  br: '\n'
-});
-
-turndownService.addRule('strikethrough', {
-  filter: ['del', 's', 'strike'],
-  replacement: (content) => {
-    return '~~' + content + '~~';
-  }
-});
-
-turndownService.addRule('horizontalRule', {
-  filter: 'hr',
-  replacement: () => {
-    return '\n\n---\n\n';
-  }
-});
-
-turndownService.addRule('table', {
-  filter: 'table',
-  replacement: (content) => {
-    return '\n\n' + content + '\n\n';
-  }
-});
-
-turndownService.addRule('tableRow', {
-  filter: 'tr',
-  replacement: (content, node) => {
-    let borderCells = '';
-    const alignMap = { left: ':--', right: '--:', center: ':-:' };
-    
-    if (node.parentNode.nodeName === 'THEAD') {
-      for (let i = 0; i < node.childNodes.length; i++) {
-        const align = node.childNodes[i].getAttribute('align') || 'left';
-        borderCells += '| ' + (alignMap[align] || '---') + ' ';
-      }
-      return '| ' + content + '|\n' + borderCells + '|\n';
-    }
-    return '| ' + content + '|\n';
-  }
-});
-
-turndownService.addRule('tableCell', {
-  filter: ['th', 'td'],
-  replacement: (content) => {
-    return content + ' | ';
-  }
-});
-
-turndownService.addRule('taskListItem', {
-  filter: (node) => {
-    return node.type === 'checkbox' && node.getAttribute('type') === 'checkbox';
-  },
-  replacement: (content, node) => {
-    return node.checked ? '[x] ' : '[ ] ';
-  }
-});
-
-turndownService.addRule('preserveComments', {
-  filter: (node) => {
-    return node.nodeType === 8;
-  },
-  replacement: (content, node) => {
-    return `<!--${node.nodeValue}-->`;
-  }
-});
-
-turndownService.addRule('listItem', {
-  filter: 'li',
-  replacement: (content, node, options) => {
-    content = content
-      .replace(/^\n+/, '')
-      .replace(/\n+$/, '\n')
-      .replace(/\n/gm, '\n  ');
-    
-    let prefix = options.bulletListMarker + ' ';
-    const parent = node.parentNode;
-    if (parent.nodeName === 'OL') {
-      const start = parent.getAttribute('start');
-      const index = Array.prototype.indexOf.call(parent.children, node);
-      prefix = (start ? Number(start) + index : index + 1) + '. ';
-    }
-    
-    return prefix + content + (node.nextSibling && !/\n$/.test(content) ? '\n' : '');
-  }
-});
-
-turndownService.addRule('frontmatter', {
-  filter: (node) => {
-    return node.getAttribute && node.getAttribute('data-type') === 'frontmatter';
-  },
-  replacement: () => {
-    return '';
-  }
-});
-
-turndownService.addRule('tableCellParagraph', {
-  filter: (node) => {
-    return node.nodeName === 'P' && 
-           node.parentNode && 
-           (node.parentNode.nodeName === 'TD' || node.parentNode.nodeName === 'TH');
-  },
-  replacement: (content) => {
-    return content;
-  }
-});
+const turndownService = createTurndownService();
 
 function markdownToHTML(markdown) {
   if (!markdown) return '';
@@ -240,24 +128,7 @@ function extractFrontmatterFromEditor() {
 function htmlToMarkdown(html) {
   if (!html) return '';
   
-  let markdown = turndownService.turndown(html);
-  
-  markdown = markdown.replace(/\\\[(\d+)\\\]/g, '[$1]');
-  
-  markdown = markdown.replace(/^\* \* \*$/gm, '---');
-  
-  markdown = markdown.replace(/^-   /gm, '- ');
-  markdown = markdown.replace(/^(\d+)\.   /gm, '$1. ');
-  
-  markdown = markdown.replace(/^(- .+)\n\s*\n(?=- )/gm, '$1\n');
-  markdown = markdown.replace(/^(\d+\. .+)\n\s*\n(?=\d+\. )/gm, '$1\n');
-  
-  markdown = markdown.replace(/<!--(.+?)-->/gs, (match, content) => {
-    if (content.includes('\n')) {
-      return `<!--\n${content}\n-->`;
-    }
-    return match;
-  });
+  let markdown = convertHtmlToMarkdown(html, turndownService);
   
   const frontmatterData = extractFrontmatterFromEditor();
   if (frontmatterData && Object.keys(frontmatterData).length > 0) {
