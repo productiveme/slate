@@ -68,7 +68,6 @@ import FloatingToolbar from './FloatingToolbar.vue';
 import { useEventListener } from '@vueuse/core';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
 import { Frontmatter } from '../extensions/Frontmatter';
 import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter';
 
@@ -86,12 +85,57 @@ const turndownService = new TurndownService({
   br: '\n'
 });
 
-turndownService.use(gfm);
+turndownService.addRule('strikethrough', {
+  filter: ['del', 's', 'strike'],
+  replacement: (content) => {
+    return '~~' + content + '~~';
+  }
+});
 
 turndownService.addRule('horizontalRule', {
   filter: 'hr',
   replacement: () => {
     return '\n\n---\n\n';
+  }
+});
+
+turndownService.addRule('table', {
+  filter: 'table',
+  replacement: (content) => {
+    return '\n\n' + content + '\n\n';
+  }
+});
+
+turndownService.addRule('tableRow', {
+  filter: 'tr',
+  replacement: (content, node) => {
+    let borderCells = '';
+    const alignMap = { left: ':--', right: '--:', center: ':-:' };
+    
+    if (node.parentNode.nodeName === 'THEAD') {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        const align = node.childNodes[i].getAttribute('align') || 'left';
+        borderCells += '| ' + (alignMap[align] || '---') + ' ';
+      }
+      return '| ' + content + '|\n' + borderCells + '|\n';
+    }
+    return '| ' + content + '|\n';
+  }
+});
+
+turndownService.addRule('tableCell', {
+  filter: ['th', 'td'],
+  replacement: (content) => {
+    return content + ' | ';
+  }
+});
+
+turndownService.addRule('taskListItem', {
+  filter: (node) => {
+    return node.type === 'checkbox' && node.getAttribute('type') === 'checkbox';
+  },
+  replacement: (content, node) => {
+    return node.checked ? '[x] ' : '[ ] ';
   }
 });
 
@@ -200,11 +244,20 @@ function htmlToMarkdown(html) {
   
   markdown = markdown.replace(/\\\[(\d+)\\\]/g, '[$1]');
   
+  markdown = markdown.replace(/^\* \* \*$/gm, '---');
+  
   markdown = markdown.replace(/^-   /gm, '- ');
   markdown = markdown.replace(/^(\d+)\.   /gm, '$1. ');
   
   markdown = markdown.replace(/^(- .+)\n\s*\n(?=- )/gm, '$1\n');
   markdown = markdown.replace(/^(\d+\. .+)\n\s*\n(?=\d+\. )/gm, '$1\n');
+  
+  markdown = markdown.replace(/<!--(.+?)-->/gs, (match, content) => {
+    if (content.includes('\n')) {
+      return `<!--\n${content}\n-->`;
+    }
+    return match;
+  });
   
   const frontmatterData = extractFrontmatterFromEditor();
   if (frontmatterData && Object.keys(frontmatterData).length > 0) {
